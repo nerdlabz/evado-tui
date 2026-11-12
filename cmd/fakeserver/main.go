@@ -1,15 +1,19 @@
 // Command fakeserver serves a small stand-in for the Evado API so the TUI
-// can be driven by hand without an account.
+// can be driven by hand without an account. It answers only requests that
+// carry its token, evt_dev unless -token says otherwise, and listens only
+// on loopback unless -remote is given.
 //
-//	go run ./cmd/fakeserver -addr :8787
+//	go run ./cmd/fakeserver -addr 127.0.0.1:8787
 //	EVADO_CONFIG=/tmp/evado-dev.json go run ./cmd/evado -server http://127.0.0.1:8787/api/v1 -token evt_dev
 package main
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -70,6 +74,7 @@ type list struct {
 }
 
 type store struct {
+	// mu is held for the whole of each request; see guard.
 	mu    sync.Mutex
 	todos []*todo
 	// tombs are the todos deleted through sync, kept so a pull can say so.
@@ -204,9 +209,20 @@ func (s *store) findList(id string) int {
 	return -1
 }
 
+const prefix = "/api/v1"
+
 func main() {
-	addr := flag.String("addr", "127.0.0.1:8787", "listen address")
+	addr := flag.String("addr", "127.0.0.1:8787", "listen address, loopback unless -remote is given")
+	token := flag.String("token", "evt_dev", "the bearer token every request must carry")
+	remote := flag.Bool("remote", false, "allow listening on an address other machines can reach")
 	flag.Parse()
+
+	if err := checkAddr(*addr, *remote); err != nil {
+		log.Fatal(err)
+	}
+	if *token == "" {
+		log.Fatal("-token must not be empty")
+	}
 
 	// A dev server may hand back a code in the response; expose it so the
 	// TUI's behaviour can be exercised without a mailbox.
@@ -214,8 +230,32 @@ func main() {
 		log.Printf("dev code: %s", os.Getenv("FAKE_DEV_CODE"))
 	}
 
-	s := newStore()
-	prefix := "/api/v1"
+	log.Printf("fake Evado API listening on http://%s%s", *addr, prefix)
+	log.Printf("use: EVADO_CONFIG=/tmp/evado-dev.json go run ./cmd/evado -server http://%s%s -token %s", *addr, prefix, *token)
+	if err := http.ListenAndServe(*addr, newServer(newStore(), *token)); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// checkAddr refuses an address other machines could reach, unless asked
+// for: the fake account takes any change from whoever holds the token, and
+// the token is a default anyone can read here.
+func checkAddr(addr string, remote bool) error {
+	if remote {
+		return nil
+	}
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return fmt.Errorf("-addr %q: %w", addr, err)
+	}
+	if ip := net.ParseIP(host); host == "localhost" || (ip != nil && ip.IsLoopback()) {
+		return nil
+	}
+	return fmt.Errorf("-addr %q is not a loopback address; use 127.0.0.1, or add -remote to listen on it anyway", addr)
+}
+
+// newServer serves the fake API for one account, reached with token.
+func newServer(s *store, token string) http.Handler {
 	mux := http.NewServeMux()
 
 	tz := "Europe/Madrid"
@@ -606,11 +646,24 @@ func main() {
 		s.fail(w, http.StatusForbidden, "forbidden", "Export needs the account scope, which pasted tokens lack")
 	})
 
-	log.Printf("fake Evado API listening on http://%s%s", *addr, prefix)
-	log.Printf("use: EVADO_CONFIG=/tmp/evado-dev.json go run ./cmd/evado -server http://%s%s -token evt_dev", *addr, prefix)
-	if err := http.ListenAndServe(*addr, mux); err != nil {
-		log.Fatal(err)
-	}
+	return s.guard(token, mux)
+}
+
+// guard turns away a request without the bearer token, as the service does,
+// and lets one request in at a time. The handlers read and change the store
+// freely, and responses are encoded from it, so the whole request holds the
+// lock: this is a stand-in for one person, not something that has to scale.
+func (s *store) guard(token string, next http.Handler) http.Handler {
+	want := []byte("Bearer " + token)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if subtle.ConstantTimeCompare([]byte(r.Header.Get("Authorization")), want) != 1 {
+			s.fail(w, http.StatusUnauthorized, "unauthorized", "Missing or invalid token")
+			return
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		next.ServeHTTP(w, r)
+	})
 }
 
 func firstNonEmpty(vals ...string) string {
@@ -759,8 +812,6 @@ func (s *store) recur(t *todo) *todo {
 // made if it is new, only the fields sent are touched, and a change that
 // is not newer than what is stored is skipped.
 func (s *store) apply(ch map[string]json.RawMessage) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	var id string
 	_ = json.Unmarshal(ch["id"], &id)
 	var updated time.Time
@@ -858,8 +909,6 @@ func cursorTime(c string) (time.Time, bool) {
 // changed is the pull half of a sync: every live todo for a first pull,
 // and after that whatever changed since, tombstones included.
 func (s *store) changed(since *time.Time) []map[string]any {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	out := []map[string]any{}
 	add := func(t *todo) {
 		if since != nil && !t.UpdatedAt.After(*since) {

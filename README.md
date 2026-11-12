@@ -552,6 +552,10 @@ EVADO_CONFIG=/tmp/evado-dev.json mise x -- go run ./cmd/evado \
   -server http://127.0.0.1:8787/api/v1 -token evt_dev
 ```
 
+It answers only requests that carry its token, `evt_dev` unless you start it
+with `-token`, and it listens only on a loopback address unless you add
+`-remote`. It handles one request at a time.
+
 The integration tests drive the real Bubble Tea model against a fake API
 through a fake terminal, asserting on rendered output: `internal/tui`
 covers navigation, forms, confirmations and error handling;
