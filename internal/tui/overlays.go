@@ -99,6 +99,10 @@ const (
 type toast struct {
 	kind toastKind
 	text string
+	// lasting marks a sync warning, which may be the only notice that an
+	// edit was lost, so it waits out the sign-in screen rather than
+	// expiring behind it.
+	lasting bool
 }
 
 func (t *toast) color() lipgloss.Color {

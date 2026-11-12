@@ -314,7 +314,7 @@ func (m *Model) done() {
 // edit was lost.
 func (m *Model) warnEach(texts []string) {
 	for i, text := range texts {
-		t := toast{kind: toastWarn, text: text}
+		t := toast{kind: toastWarn, text: text, lasting: true}
 		if i == 0 {
 			m.toast, m.toastAge = &t, 0
 			continue
@@ -333,6 +333,16 @@ func (m *Model) nextToast() *toast {
 	m.toastQueue = m.toastQueue[1:]
 	m.toastAge = 0
 	return &t
+}
+
+// holdToasts puts a sync warning on screen back at the head of the queue
+// while the sign-in screen is up, as that screen shows no toasts.
+func (m *Model) holdToasts() {
+	if m.layer != layerLogin || m.toast == nil || !m.toast.lasting {
+		return
+	}
+	m.toastQueue = append([]toast{*m.toast}, m.toastQueue...)
+	m.toast = nil
 }
 
 // okf shows a success toast.
@@ -511,6 +521,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Signing out swaps in a fresh model, so the clocks are started on
 	// whichever model is carrying on.
 	if nm, ok := next.(*Model); ok {
+		nm.holdToasts()
 		return nm, tea.Batch(cmd, nm.animate(), nm.autoSync())
 	}
 	return next, cmd
@@ -534,8 +545,13 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.toast != nil {
 			m.toastAge++
 			if m.toastAge > 2 {
-				m.toast = m.nextToast()
+				m.toast = nil
 			}
+		}
+		// Warnings held while the sign-in screen was up come once it has
+		// closed, after whatever signing in had to say.
+		if m.toast == nil && m.layer != layerLogin {
+			m.toast = m.nextToast()
 		}
 		// The clock keeps running while idle: sections and counts depend on
 		// today's date, and a toast only expires on a tick.

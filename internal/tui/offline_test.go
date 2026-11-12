@@ -475,6 +475,46 @@ func TestASyncWithSeveralWarningsShowsEachInTurn(t *testing.T) {
 	}
 }
 
+// The sign-in screen shows no toasts, so the warnings of a sync that ends
+// while it is up wait for it to close instead of expiring unseen.
+func TestSyncWarningsWaitOutTheSignInScreen(t *testing.T) {
+	h := newHarness(t, sampleAPI())
+	h.send(syncedMsg{res: local.Result{Refused: []string{"Buy milk"}}})
+	h.send(todosMsg{err: &api.Error{StatusCode: http.StatusUnauthorized, Code: api.CodeUnauthorized}})
+	h.send(syncedMsg{res: local.Result{
+		Replaced: []local.Replacement{{ID: "a", Title: "Pay rent", Fields: []string{"title"}}},
+	}})
+	h.run(h.cmds...)
+	h.cmds = nil
+	if h.model.layer != layerLogin {
+		t.Fatalf("layer = %v, want the sign-in screen", h.model.layer)
+	}
+	for range 10 {
+		h.send(tickMsg(time.Now()))
+	}
+
+	h.typeText("evt_test")
+	h.press("enter")
+	if h.model.layer != layerNone {
+		t.Fatalf("layer = %v after signing in again", h.model.layer)
+	}
+	var seen []string
+	for range 12 {
+		seen = append(seen, h.model.toastText())
+		h.send(tickMsg(time.Now()))
+	}
+	said := strings.Join(seen, "\n")
+	for _, w := range []string{
+		"the server refused 1 change: Buy milk",
+		"1 edit was replaced by a newer change: 'Pay rent' (title)",
+		"token saved",
+	} {
+		if !strings.Contains(said, w) {
+			t.Errorf("never shown: %q\n---\n%s", w, said)
+		}
+	}
+}
+
 // Warnings that answer what you just did still replace one another.
 func TestAWarningAfterAKeyPressReplacesTheLastOne(t *testing.T) {
 	h := offlineHarness(t, config.Config{Local: true})
