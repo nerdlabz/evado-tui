@@ -19,7 +19,7 @@ jobs:
     outputs:
       version: ${{ steps.version.outputs.value }}
     steps:
-      - uses: useblacksmith/checkout@v1
+      - uses: actions/checkout@v4
       - name: Read version
         id: version
         env:
@@ -69,7 +69,9 @@ jobs:
 
   sign-macos:
     needs: build
-    runs-on: blacksmith-6vcpu-macos-26
+    # This job holds the Developer ID key and the App Store Connect key, so it
+    # stays on a GitHub-hosted runner rather than a third party's machines.
+    runs-on: macos-26
     environment: release
     steps:
       - uses: actions/download-artifact@v4
