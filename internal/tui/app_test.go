@@ -1062,6 +1062,41 @@ func TestClearDateSendsNull(t *testing.T) {
 	}
 }
 
+// On a short terminal the edit form scrolls, and each field tab reaches
+// has to be drawn, with the focus marker on it.
+func TestShortTerminalFormScrollsToFocusedField(t *testing.T) {
+	h := newHarness(t, sampleAPI())
+	h.send(tea.WindowSizeMsg{Width: 100, Height: 24})
+	h.press("e")
+	if h.model.layer != layerForm || !h.model.form.scrollable() {
+		t.Fatalf("want a scrolling form at height 24, layer = %v", h.model.layer)
+	}
+	labels := []string{"list", "notes", "do day", "do at", "due", "remind", "repeat", "done"}
+	for _, label := range labels {
+		h.press("tab")
+		focused := ""
+		for _, line := range strings.Split(stripANSI(h.view()), "\n") {
+			if strings.Contains(line, "▌ ") {
+				focused = line
+			}
+		}
+		if !strings.Contains(focused, "▌ "+label) {
+			t.Fatalf("after tabbing to %q the focused row is %q\n---\n%s", label, focused, stripANSI(h.view()))
+		}
+	}
+	// The last field brings the closing note into view, and the hint
+	// stops promising more below.
+	h.mustContain("Empty date fields clear them")
+	h.mustContain("more fields above")
+	h.mustNotContain("more fields below")
+	// Wrapping back to the top shows the title again.
+	h.press("tab")
+	h.mustContain("more fields below")
+	if v := stripANSI(h.view()); !strings.Contains(v, "▌ title") {
+		t.Errorf("title is not focused after wrapping\n---\n%s", v)
+	}
+}
+
 func TestSearchFiltersTodos(t *testing.T) {
 	f := sampleAPI()
 	h := newHarness(t, f)

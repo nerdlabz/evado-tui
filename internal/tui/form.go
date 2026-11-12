@@ -449,19 +449,44 @@ func (f *form) scrollToFocus() {
 		return
 	}
 	avail := f.contentHeight()
+	starts := make([]int, len(f.fields))
 	pos := 0
-	for i := 0; i < f.focus; i++ {
-		pos += f.fieldHeight(f.fields[i])
+	for i, fl := range f.fields {
+		starts[i] = pos
+		pos += f.fieldHeight(fl)
 	}
-	if pos < f.offset {
-		f.offset = pos
+	start := starts[f.focus]
+	end := start + f.fieldHeight(f.fields[f.focus])
+	if f.lastFocusable() {
+		// Tab never lands on the notes after the last field, so bring
+		// them in with it.
+		end = pos
 	}
-	if pos-f.offset > avail-1 {
-		f.offset = pos - avail + 1
+	if start < f.offset {
+		f.offset = start
 	}
-	if f.offset < 0 {
-		f.offset = 0
+	// The offset stays on a field's first row, since view draws whole
+	// fields only, and moves just far enough for the focused field to end
+	// inside the window. One taller than the window starts it.
+	if end-f.offset > avail {
+		f.offset = start
+		for i := 0; i < f.focus; i++ {
+			if end-starts[i] <= avail {
+				f.offset = starts[i]
+				break
+			}
+		}
 	}
+}
+
+// lastFocusable reports whether only static fields follow the focused one.
+func (f *form) lastFocusable() bool {
+	for _, fl := range f.fields[f.focus+1:] {
+		if !fl.static() {
+			return false
+		}
+	}
+	return true
 }
 
 func (f *form) cycle(d int) *form {
@@ -491,34 +516,39 @@ func (f *form) height() int {
 
 func (f *form) view() string {
 	f.syncValues()
+	// A resize, or a field whose text wraps onto more rows, can leave the
+	// focused field outside the window it was scrolled into.
+	f.scrollToFocus()
 	avail := f.contentHeight()
 	var b strings.Builder
 	b.WriteString(brandGradient(f.title))
 	b.WriteString("\n\n")
 
-	// Render from the scroll offset, tracking where the focused field
-	// starts so it can be highlighted.
-	used := 0
-	for _, fl := range f.fields {
-		used += f.fieldHeight(fl)
-		if used > f.offset {
-			break
-		}
-	}
-	shown := 0
+	// Render the fields from the scroll offset down, stopping at the first
+	// one that does not fit so the window has no gaps. The first one is
+	// drawn even when it is too tall, so the window is never empty.
+	pos, shown := 0, 0
 	for _, fl := range f.fields {
 		h := f.fieldHeight(fl)
-		if used+h > f.offset && shown+h <= avail+1 {
+		if pos >= f.offset {
+			if shown > 0 && shown+h > avail+1 {
+				break
+			}
 			b.WriteString(f.fieldView(fl))
 			shown += h
 		}
-		used += h
+		pos += h
 	}
 	if f.scrollable() {
 		// Say so, rather than leaving the user to guess why the last field
-		// seems to be missing.
+		// seems to be missing. Once the window reaches the end, say where
+		// the rest went instead.
 		b.WriteString("\n")
-		b.WriteString(styWarn.Render("▾ more fields below, keep pressing tab"))
+		if pos < f.fieldsHeight() {
+			b.WriteString(styWarn.Render("▾ more fields below, keep pressing tab"))
+		} else {
+			b.WriteString(styWarn.Render("▴ more fields above, shift+tab goes back"))
+		}
 	}
 	b.WriteString("\n")
 	saveKey, saveHint := "enter", "enter save"
