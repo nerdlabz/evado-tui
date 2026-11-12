@@ -181,6 +181,7 @@ func (m *Model) onCodeVerified(msg codeVerifiedMsg) tea.Cmd {
 	// Straight to the server there is nothing here to tie to the account.
 	m.client = directClient(m.joining.remote)
 	m.user, m.lists = msg.res.User, msg.res.Lists
+	m.outdateMe(m.meSeq)
 	cmds := []tea.Cmd{m.finishJoin(), m.setBusy(""), m.refreshAll(true)}
 	if err := m.cfg.Save(); err != nil {
 		cmds = append(cmds, m.warnf("signed in, but the server choice could not be saved: %s", errText(err)))

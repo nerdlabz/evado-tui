@@ -22,6 +22,11 @@ type meMsg struct {
 	user  api.User
 	lists []api.List
 	err   error
+	// seq is the request this answers. write says the request changed the
+	// account and read it back, so its answer is newer than any read sent
+	// while it was on its way, which may have looked before the change.
+	seq   int
+	write bool
 }
 
 type todosMsg struct {
@@ -295,10 +300,10 @@ func tickCmd() tea.Cmd {
 	return tea.Tick(tickInterval, func(t time.Time) tea.Msg { return tickMsg(t) })
 }
 
-func fetchMe(ctx context.Context, c *api.Client) tea.Cmd {
+func fetchMe(ctx context.Context, c *api.Client, seq int) tea.Cmd {
 	return func() tea.Msg {
 		u, ls, err := c.Me(ctx)
-		return meMsg{user: u, lists: ls, err: err}
+		return meMsg{user: u, lists: ls, err: err, seq: seq}
 	}
 }
 
@@ -818,7 +823,7 @@ func deleteAccount(ctx context.Context, c *api.Client, email string) tea.Cmd {
 	}
 }
 
-func setTimezone(ctx context.Context, c *api.Client, tz string) tea.Cmd {
+func setTimezone(ctx context.Context, c *api.Client, tz string, seq int) tea.Cmd {
 	return func() tea.Msg {
 		u, err := c.SetTimezone(ctx, tz)
 		if err == nil {
@@ -827,7 +832,7 @@ func setTimezone(ctx context.Context, c *api.Client, tz string) tea.Cmd {
 				u = fresh
 			}
 		}
-		return meMsg{user: u, err: err}
+		return meMsg{user: u, err: err, seq: seq, write: true}
 	}
 }
 

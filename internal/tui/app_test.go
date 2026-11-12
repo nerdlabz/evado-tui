@@ -1797,6 +1797,60 @@ func TestRejectedTokenReturnsToLogin(t *testing.T) {
 	}
 }
 
+// A read of the account that was sent before the timezone changed, and
+// answers after the change was saved, must not put the old timezone back.
+func TestSlowAccountReadDoesNotUndoTimezoneChange(t *testing.T) {
+	f := sampleAPI()
+	h := newHarness(t, f)
+	slow := h.model.fetchMe()()
+	h.run(h.model.saveTimezone("Europe/Paris"))
+	if h.model.user.TZ != "Europe/Paris" {
+		t.Fatalf("tz = %q after saving", h.model.user.TZ)
+	}
+	h.send(slow)
+	if h.model.user.TZ != "Europe/Paris" || h.model.loc.String() != "Europe/Paris" {
+		t.Errorf("a slower read put back tz %q, loc %s", h.model.user.TZ, h.model.loc)
+	}
+
+	// A read sent while the change was on its way may have looked before
+	// it landed, whichever of the two answers first.
+	for _, readFirst := range []bool{true, false} {
+		save := h.model.saveTimezone("Asia/Tokyo")
+		read := h.model.fetchMe()
+		f.tz = "UTC"
+		before := read()
+		saved := save()
+		if readFirst {
+			h.send(before)
+			h.send(saved)
+		} else {
+			h.send(saved)
+			h.send(before)
+		}
+		if h.model.user.TZ != "Asia/Tokyo" {
+			t.Errorf("read first %v: tz = %q, want the saved one", readFirst, h.model.user.TZ)
+		}
+	}
+}
+
+// An answer about the account that arrives after signing out belongs to
+// the account that left, and must not show it on the sign-in screen.
+func TestAccountReadFromBeforeSignOutIsIgnored(t *testing.T) {
+	h, _ := signOutHarness(t)
+	late := h.model.fetchMe()()
+	h.press("4")
+	h.model.acct.selectRow("signout")
+	h.press("enter", "enter")
+	if h.model.layer != layerLogin {
+		t.Fatalf("layer = %v, want the sign-in screen", h.model.layer)
+	}
+	h.send(late)
+	if h.model.user.ID != "" || h.model.ready || len(h.model.lists) != 0 {
+		t.Errorf("the signed-out account came back: user %q, ready %v, %d lists",
+			h.model.user.ID, h.model.ready, len(h.model.lists))
+	}
+}
+
 // The clock has to keep running while nothing is loading, or a toast that
 // arrives after the last request never goes away.
 func TestIdleTickKeepsRunning(t *testing.T) {

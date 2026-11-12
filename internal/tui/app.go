@@ -98,6 +98,11 @@ type Model struct {
 
 	user  api.User
 	lists []api.List
+	// meSeq numbers the requests for the account, so an answer that took
+	// longer than a newer one is not shown over it. Answers numbered below
+	// meFloor were asked for under a sign-in that has since ended.
+	meSeq   int
+	meFloor int
 
 	// invite is the invitation being written, kept so a refusal can bring
 	// its form back with what was typed.
@@ -383,6 +388,7 @@ func (m *Model) reauthenticate() {
 	m.forgetSession()
 	m.cfg.Token = ""
 	_ = m.cfg.Save()
+	m.outdateMe(m.meSeq)
 	m.done()
 	m.form, m.conf, m.pending, m.declined = nil, nil, nil, nil
 	m.focus = focusList
@@ -415,7 +421,26 @@ func errText(err error) string {
 // set it reloads everything from the server; without, the todos catch up
 // through the change feed when they can.
 func (m *Model) refreshAll(full bool) tea.Cmd {
-	return tea.Batch(fetchMe(m.ctx, m.client), m.refreshCurrentTab(full))
+	return tea.Batch(m.fetchMe(), m.refreshCurrentTab(full))
+}
+
+// fetchMe reads the account and its lists.
+func (m *Model) fetchMe() tea.Cmd {
+	m.meSeq++
+	return fetchMe(m.ctx, m.client, m.meSeq)
+}
+
+// saveTimezone changes the account's timezone and reads the account back.
+func (m *Model) saveTimezone(tz string) tea.Cmd {
+	m.meSeq++
+	return setTimezone(m.ctx, m.client, tz, m.meSeq)
+}
+
+// outdateMe sets aside the answers to every account request numbered up to
+// seq, which were made under a sign-in that is over.
+func (m *Model) outdateMe(seq int) {
+	m.meSeq = seq + 1
+	m.meFloor = m.meSeq
 }
 
 func (m *Model) refreshCurrentTab(full bool) tea.Cmd {
@@ -560,6 +585,9 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// A fresh model, not a reset one: every view holds the old account's
 		// todos, lists and undo history, and none of it should survive.
 		fresh := New(m.ctx, msg.cfg)
+		// The old account's requests still on their way answer to this
+		// model now, and must not sign it back in.
+		fresh.outdateMe(m.meSeq)
 		fresh.width, fresh.height = m.width, m.height
 		fresh.resize()
 		switch {
@@ -1022,11 +1050,12 @@ func (m *Model) onLoginKey(msg tea.KeyMsg) tea.Cmd {
 	}
 	m.client = directClient(m.joining.remote)
 	m.user = api.User{}
+	m.outdateMe(m.meSeq)
 	ended := m.finishJoin()
 	if err := m.cfg.Save(); err != nil {
 		return m.warnf("could not save the token: %s", errText(err))
 	}
-	return tea.Batch(ended, m.okf("token saved"), m.setBusy("verifying token"), fetchMe(m.ctx, m.client))
+	return tea.Batch(ended, m.okf("token saved"), m.setBusy("verifying token"), m.fetchMe())
 }
 
 // writeExport saves an account export to path.

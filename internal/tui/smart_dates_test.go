@@ -17,7 +17,7 @@ func TestSmarterDatesAccountSetting(t *testing.T) {
 		}
 	}
 	f.smartAvailable = true
-	h.run(fetchMe(h.model.ctx, h.model.client))
+	h.run(h.model.fetchMe())
 	h.model.tab = tabAccount
 	h.model.acct.selectRow("smart-dates")
 	h.mustContain("Smarter dates: off")

@@ -24,6 +24,13 @@ func (m *Model) onResult(msg tea.Msg) (*Model, tea.Cmd) {
 		return m, m.okf("smarter dates saved")
 
 	case meMsg:
+		// An answer from before a sign-in ended, or a read that a newer
+		// one has overtaken, would put back what has since replaced it:
+		// another account, or the timezone from before a change. A newer
+		// read is still on its way and clears the busy state.
+		if msg.seq < m.meFloor || (!msg.write && msg.seq != m.meSeq) {
+			return m, nil
+		}
 		if msg.err != nil {
 			m.done()
 			return m, m.failf(msg.err, "")
@@ -31,6 +38,11 @@ func (m *Model) onResult(msg tea.Msg) (*Model, tea.Cmd) {
 		if msg.user.ID != m.user.ID {
 			// The views on screen were the last account's, or nobody's.
 			m.todos.dropViewState()
+		}
+		if msg.write {
+			// Reads sent while the change was on its way may have looked
+			// before it landed.
+			m.meSeq++
 		}
 		m.user = msg.user
 		if msg.lists != nil {

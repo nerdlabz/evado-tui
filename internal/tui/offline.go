@@ -135,6 +135,7 @@ func (m *Model) onSignedIn(msg signedInMsg) tea.Cmd {
 	m.listsV.inbox = inboxView{m: m}
 	if fromLogin {
 		m.user = api.User{}
+		m.outdateMe(m.meSeq)
 	}
 	cmds := []tea.Cmd{m.refreshAll(true), m.syncNow()}
 	if fromLogin {

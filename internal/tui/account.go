@@ -342,7 +342,7 @@ func (v *accountView) onUsername(msg usernameMsg) tea.Cmd {
 	}
 	// The service is asked again, so every view shows what it now holds
 	// rather than what this edit assumed.
-	return tea.Batch(said, fetchMe(m.ctx, m.client))
+	return tea.Batch(said, m.fetchMe())
 }
 
 // renameSelf puts the account's username on its own entry in every member

@@ -440,7 +440,7 @@ func TestViewsBelongToTheAccountTheyWereSavedFor(t *testing.T) {
 	h.saveAs("Mine")
 
 	signIn := func(id string) {
-		h.send(meMsg{user: api.User{ID: id, Email: id + "@example.com", TZ: "UTC"}, lists: f.lists})
+		h.send(meMsg{seq: h.model.meSeq, user: api.User{ID: id, Email: id + "@example.com", TZ: "UTC"}, lists: f.lists})
 		h.run(h.cmds...)
 		h.cmds = nil
 	}
@@ -489,7 +489,7 @@ func TestSwitchingAccountsLeavesNoOpenView(t *testing.T) {
 	h.show(todoFilter{mode: viewStatus, status: api.StatusToday, listID: "gone"})
 	h.saveAs("Broken")
 	h.model.todos.repair = &repairState{view: h.views()[0]}
-	h.send(meMsg{user: api.User{ID: "u2", TZ: "UTC"}, lists: f.lists})
+	h.send(meMsg{seq: h.model.meSeq, user: api.User{ID: "u2", TZ: "UTC"}, lists: f.lists})
 	if h.model.todos.repair != nil || h.model.todos.opened != "" {
 		t.Error("the last account's repair notice followed the switch")
 	}
@@ -824,7 +824,7 @@ func TestAListThatVanishesUnderAnOpenViewIsRepairedNotDropped(t *testing.T) {
 	// The list is left elsewhere and the next refresh no longer has it.
 	f.lists = f.lists[:2]
 	loads := len(f.queries)
-	h.send(meMsg{user: api.User{ID: "u1", TZ: "UTC"}, lists: f.lists})
+	h.send(meMsg{seq: h.model.meSeq, user: api.User{ID: "u1", TZ: "UTC"}, lists: f.lists})
 	h.run(h.cmds...)
 	h.cmds = nil
 
@@ -846,7 +846,7 @@ func TestAListThatVanishesWithNoViewOpenIsStillDropped(t *testing.T) {
 	h := viewsHarness(t, f)
 	h.show(todoFilter{mode: viewStatus, status: api.StatusToday, listID: "l3"})
 	f.lists = f.lists[:2]
-	h.send(meMsg{user: api.User{ID: "u1", TZ: "UTC"}, lists: f.lists})
+	h.send(meMsg{seq: h.model.meSeq, user: api.User{ID: "u1", TZ: "UTC"}, lists: f.lists})
 	h.run(h.cmds...)
 	h.cmds = nil
 	if h.model.todos.filter.listID != "" {
@@ -906,7 +906,7 @@ func TestTodayIsWorkedOutInTheAccountTimezoneWhenTheViewOpens(t *testing.T) {
 	}
 	setZone := func(tz string) {
 		f.tz = tz
-		h.run(fetchMe(h.model.ctx, h.model.client))
+		h.run(h.model.fetchMe())
 	}
 
 	h.open("Today")

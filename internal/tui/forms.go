@@ -95,7 +95,7 @@ func (m *Model) applyForm(res formResult) (tea.Model, tea.Cmd) {
 			return m, m.warnf("%q is not a known IANA timezone", tz)
 		}
 		m.busy = true
-		return m, tea.Batch(m.setBusy("saving timezone"), setTimezone(m.ctx, m.client, tz), fetchMe(m.ctx, m.client))
+		return m, tea.Batch(m.setBusy("saving timezone"), m.saveTimezone(tz), m.fetchMe())
 	case formExport:
 		path := strings.TrimSpace(v["path"])
 		m.busy = true
