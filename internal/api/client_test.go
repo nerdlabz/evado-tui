@@ -311,6 +311,36 @@ func TestListsAndMembers(t *testing.T) {
 	}
 }
 
+// A list made with an id of its own sends it, and one made without leaves
+// the field out rather than sending it empty, which the service would read
+// as an id.
+func TestCreateListSendsAnIDOnlyWhenGiven(t *testing.T) {
+	var bodies []string
+	c, _ := newServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/lists" {
+			t.Errorf("unexpected %s %s", r.Method, r.URL.Path)
+		}
+		raw, _ := io.ReadAll(r.Body)
+		bodies = append(bodies, string(raw))
+		w.WriteHeader(http.StatusCreated)
+		_, _ = w.Write([]byte(`{"list":{"id":"6f1c2a9e-0d4b-4c3a-9f5e-2b7d8c1a0e34","name":"Trip"}}`))
+	}))
+	ctx := context.Background()
+	if _, err := c.CreateListWithID(ctx, "6f1c2a9e-0d4b-4c3a-9f5e-2b7d8c1a0e34", "Trip"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.CreateList(ctx, "Trip"); err != nil {
+		t.Fatal(err)
+	}
+	want := []string{`{"id":"6f1c2a9e-0d4b-4c3a-9f5e-2b7d8c1a0e34","name":"Trip"}`, `{"name":"Trip"}`}
+	for i := range want {
+		if i >= len(bodies) || strings.TrimSpace(bodies[i]) != want[i] {
+			t.Errorf("bodies = %q, want %q", bodies, want)
+			break
+		}
+	}
+}
+
 // invitationServer answers POST /lists/l1/invitations and records each
 // body verbatim, so a test can tell what was sent from what was merely
 // empty.

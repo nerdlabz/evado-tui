@@ -531,19 +531,64 @@ func importedCopyID(userID, sourceID string) string {
 // list the service turns down, for instance for too many lists, keeps its
 // todos pending and is tried again next sync; the refusals come back
 // together so the rest can go on.
+//
+// Each goes with an id saved here first, so that if the list is made but
+// its answer or the save after it is lost, the next attempt gets the same
+// list back rather than a second one. See List.CreateID.
 func (b *Backend) makeLists(ctx context.Context, remote *api.Client, res *Result) (error, error) {
 	b.mu.Lock()
 	var unmade []List
-	for _, l := range b.st.Lists {
-		if l.Local {
-			unmade = append(unmade, l)
+	var keyed []int
+	for i := range b.st.Lists {
+		l := &b.st.Lists[i]
+		if !l.Local {
+			continue
+		}
+		if l.CreateID == "" {
+			l.CreateID = NewID()
+			keyed = append(keyed, i)
+		}
+		unmade = append(unmade, *l)
+	}
+	var err error
+	if len(keyed) > 0 {
+		if err = b.persist(); err != nil {
+			// Kept in memory only, an id could be sent and then forgotten,
+			// which is what it is there to prevent.
+			for _, i := range keyed {
+				b.st.Lists[i].CreateID = ""
+			}
 		}
 	}
 	b.mu.Unlock()
+	if err != nil {
+		return nil, err
+	}
 
 	var refused error
 	for _, l := range unmade {
-		made, err := remote.CreateList(ctx, l.Name)
+		made, err := remote.CreateListWithID(ctx, l.CreateID, l.Name)
+		if api.CodeOf(err) == api.CodeIDConflict {
+			// The id is not this account's to use, so the service picks one.
+			made, err = remote.CreateList(ctx, l.Name)
+		}
+		if api.CodeOf(err) == api.CodeListDeleted {
+			// The list was made by an earlier attempt and then deleted
+			// elsewhere. The service never brings a deleted list back, and
+			// making it again under a new id is for the person to choose,
+			// so it leaves here as any list deleted elsewhere does.
+			b.mu.Lock()
+			if b.list(l.ID) != nil {
+				res.ListsGone = append(res.ListsGone, b.dropDeleted(l.ID)...)
+				res.Changed = true
+			}
+			err = b.persist()
+			b.mu.Unlock()
+			if err != nil {
+				return refused, err
+			}
+			continue
+		}
 		if err != nil {
 			if !refusal(err) {
 				return nil, err // the error keeps the service's retry delay
@@ -552,17 +597,44 @@ func (b *Backend) makeLists(ctx context.Context, remote *api.Client, res *Result
 			continue
 		}
 		b.mu.Lock()
-		b.bindList(l.ID, l.Name, made)
+		b.bindList(l.ID, made)
 		err = b.persist()
 		b.mu.Unlock()
 		if err != nil {
 			// The list now exists in the account, and without its id kept
-			// here the next sync would make it a second time.
+			// here the next sync asks for it again by its CreateID.
 			return refused, err
 		}
 		res.Changed = true
 	}
 	return refused, nil
+}
+
+// dropDeleted takes away a list made here that the service says was
+// deleted, settling its todos as settleGone does for any list that leaves
+// the account: those made here move to the personal list and go up there.
+// Only the todos in that list are touched. The caller holds the lock.
+func (b *Backend) dropDeleted(id string) []GoneList {
+	name := id
+	known := map[string]bool{}
+	b.st.Lists = slices.DeleteFunc(b.st.Lists, func(l List) bool {
+		if l.ID == id {
+			name = l.Name
+			return true
+		}
+		known[l.ID] = true
+		return false
+	})
+	for _, t := range b.st.Todos {
+		if t.ListID != id {
+			known[t.ListID] = true
+		}
+	}
+	deleting := map[string]bool{}
+	for _, l := range b.st.Deleted {
+		deleting[l.ID] = true
+	}
+	return b.settleGone(known, deleting, map[string]string{id: name})
 }
 
 // renameLists sends the names given here to lists the account holds. A
@@ -909,24 +981,34 @@ func sameName(a, b *string) bool {
 	return *a == *b
 }
 
-// bindList gives a list made here the id the service gave it. sent is the
-// name it was created with: one renamed while that was on its way keeps
-// the new name, which goes up as a rename, and one deleted meanwhile is
-// deleted there too. The caller holds the lock.
-func (b *Backend) bindList(localID, sent string, made api.List) {
-	found := false
-	for i := range b.st.Lists {
-		if l := &b.st.Lists[i]; l.ID == localID {
-			found = true
-			name := l.Name
-			*l = List{List: made}
-			if name != sent {
-				l.Name, l.Renamed, l.Was = name, true, made.Name
+// bindList gives a list made here the id the service gave it. One renamed
+// while that was on its way keeps the new name, which goes up as a rename,
+// and one deleted meanwhile is deleted there too. The caller holds the
+// lock.
+func (b *Backend) bindList(localID string, made api.List) {
+	// Another copy of evado sending the same id may have bound the list
+	// already, or a pull brought it in. It is then the same list, which
+	// must not be queued for deletion as one made twice would be.
+	if made.ID != localID && b.list(made.ID) != nil {
+		b.st.Lists = slices.DeleteFunc(b.st.Lists, func(l List) bool { return l.ID == localID })
+	} else {
+		found := false
+		for i := range b.st.Lists {
+			if l := &b.st.Lists[i]; l.ID == localID {
+				found = true
+				name := l.Name
+				*l = List{List: made}
+				// Against what the service holds, not what was sent: a
+				// repeated create answers the list under the name the first
+				// attempt gave it.
+				if name != made.Name {
+					l.Name, l.Renamed, l.Was = name, true, made.Name
+				}
 			}
 		}
-	}
-	if !found {
-		b.st.Deleted = append(b.st.Deleted, List{List: made})
+		if !found {
+			b.st.Deleted = append(b.st.Deleted, List{List: made})
+		}
 	}
 	for i := range b.st.Todos {
 		if t := &b.st.Todos[i]; t.ListID == localID {

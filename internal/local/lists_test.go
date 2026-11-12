@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -399,6 +400,150 @@ func TestADeletionMakesRoomForANewListInOneSync(t *testing.T) {
 	}
 }
 
+// madeButNotSaved is a list made offline, with a todo in it, that the next
+// sync makes in the account and then fails to save: the file cannot be
+// read when the answer comes, as if another copy of evado had broken it.
+// The file is put back as it was before the answer, which is what a crash
+// then would leave, and opened again.
+func madeButNotSaved(t *testing.T) (*service, *Backend, api.Todo) {
+	t.Helper()
+	ctx := context.Background()
+	svc, url := newService(t)
+	path := filepath.Join(t.TempDir(), "todos.json")
+	first := syncedAt(t, path, url)
+	c := first.Client()
+	svc.down.Store(true)
+	trip, err := c.CreateList(ctx, "Trip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	packed, err := c.CreateTodos(ctx, api.NewTodo{Title: "Pack", ListID: trip.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.down.Store(false)
+	var before []byte
+	svc.listMade = func() {
+		svc.listMade = nil
+		before, err = os.ReadFile(path)
+		if err == nil {
+			err = os.WriteFile(path, []byte("{"), 0o600)
+		}
+	}
+	if _, serr := first.Sync(ctx); serr == nil {
+		t.Fatal("the sync saved over a file it could not read")
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, before, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	b, err := Open(path, "evt_x", url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return svc, b, packed[0]
+}
+
+// The list is created with an id kept here before it is sent, so the next
+// sync asks for the same list again and finds it, rather than making it a
+// second time.
+func TestAListMadeButNotSavedIsNotMadeAgain(t *testing.T) {
+	svc, b, packed := madeButNotSaved(t)
+	if _, err := b.Sync(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	trips := slices.DeleteFunc(slices.Clone(svc.lists), func(l api.List) bool { return l.Name != "Trip" })
+	if len(trips) != 1 {
+		t.Fatalf("the service has %d lists named Trip, want 1: %+v", len(trips), svc.lists)
+	}
+	if len(svc.listIDs) != 2 || svc.listIDs[0] == "" || svc.listIDs[1] != svc.listIDs[0] || trips[0].ID != svc.listIDs[0] {
+		t.Errorf("ids sent = %q, list %s, want the same id both times", svc.listIDs, trips[0].ID)
+	}
+	if got := svc.todos[packed.ID]; got == nil || got.ListID != trips[0].ID {
+		t.Errorf("the todo made in it is %+v, want it in %s", got, trips[0].ID)
+	}
+	if got := strings.Join(listNames(t, b.Client()), ","); got != "Personal,Trip" {
+		t.Errorf("lists here = %s", got)
+	}
+	if st := b.Status(); st.Pending != 0 || st.Err != nil {
+		t.Errorf("status = %+v", st)
+	}
+}
+
+// If the list made by the attempt that was not saved is deleted elsewhere
+// before the next sync, the service will not make it again under that id,
+// and it is not made again under another: it leaves here as any list
+// deleted elsewhere does, and the todo made in it, which never went up,
+// moves to the personal list and goes up there.
+func TestAListDeletedElsewhereBeforeItsCreateWasSavedLeaves(t *testing.T) {
+	svc, b, packed := madeButNotSaved(t)
+	svc.dropList(svc.listIDs[0])
+	res, err := b.Sync(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(svc.listIDs) != 2 || svc.listIDs[1] != svc.listIDs[0] || svc.named("Trip") != nil {
+		t.Errorf("ids sent = %q, lists %+v, want the list not made again", svc.listIDs, svc.lists)
+	}
+	want := GoneList{Name: "Trip", Into: "Personal", Moved: []string{"Pack"}}
+	if len(res.ListsGone) != 1 || res.ListsGone[0].Name != want.Name || res.ListsGone[0].Into != want.Into ||
+		!slices.Equal(res.ListsGone[0].Moved, want.Moved) || len(res.ListsGone[0].Lost)+len(res.ListsGone[0].Edits) != 0 {
+		t.Errorf("gone = %+v, want %+v", res.ListsGone, want)
+	}
+	if got := svc.todos[packed.ID]; got == nil || got.DeletedAt != nil || got.ListID != "p1" {
+		t.Errorf("the service has %+v, want the todo in the personal list", got)
+	}
+	if got := strings.Join(listNames(t, b.Client()), ","); got != "Personal" {
+		t.Errorf("lists here = %s, want the deleted one gone", got)
+	}
+	if st := b.Status(); st.Pending != 0 || st.Err != nil || !res.Changed {
+		t.Errorf("status = %+v, changed %v", st, res.Changed)
+	}
+}
+
+// An id the account may not use is refused, and the list is made without
+// one, as the service chooses.
+func TestAListWhoseIDIsTakenIsMadeWithoutIt(t *testing.T) {
+	ctx := context.Background()
+	svc, url := newService(t)
+	b := syncedAt(t, filepath.Join(t.TempDir(), "todos.json"), url)
+	c := b.Client()
+	svc.down.Store(true)
+	trip, err := c.CreateList(ctx, "Trip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	packed, err := c.CreateTodos(ctx, api.NewTodo{Title: "Pack", ListID: trip.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	taken := NewID()
+	b.mu.Lock()
+	b.list(trip.ID).CreateID = taken
+	err = b.persist()
+	b.mu.Unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.foreignLists[taken] = true
+	svc.down.Store(false)
+	if _, err := b.Sync(ctx); err != nil {
+		t.Fatal(err)
+	}
+	made := svc.named("Trip")
+	if !slices.Equal(svc.listIDs, []string{taken, ""}) || made == nil || made.ID == taken {
+		t.Fatalf("ids sent = %q, list %+v, want the taken id and then none", svc.listIDs, made)
+	}
+	if got := svc.todos[packed[0].ID]; got == nil || got.ListID != made.ID {
+		t.Errorf("the todo made in it is %+v, want it in %s", got, made.ID)
+	}
+	if st := b.Status(); st.Pending != 0 || st.Err != nil {
+		t.Errorf("status = %+v", st)
+	}
+}
+
 // A rename made while the list's creation is on its way is not lost when
 // the service answers with the name it was created with.
 func TestRenameDuringCreationIsKept(t *testing.T) {
@@ -406,7 +551,7 @@ func TestRenameDuringCreationIsKept(t *testing.T) {
 	b.mu.Lock()
 	b.st.UserID = "u1"
 	b.st.Lists = append(b.st.Lists, List{Local: true, List: api.List{ID: "tmp", Name: "Renamed meanwhile", Role: "owner"}})
-	b.bindList("tmp", "As sent", api.List{ID: "real", Name: "As sent", Role: "owner"})
+	b.bindList("tmp", api.List{ID: "real", Name: "As sent", Role: "owner"})
 	l := b.list("real")
 	b.mu.Unlock()
 	if l == nil || l.Name != "Renamed meanwhile" || !l.Renamed || l.Was != "As sent" {
@@ -415,11 +560,21 @@ func TestRenameDuringCreationIsKept(t *testing.T) {
 
 	// And one deleted meanwhile is deleted there too.
 	b.mu.Lock()
-	b.bindList("gone", "Gone", api.List{ID: "made", Name: "Gone", Role: "owner"})
+	b.bindList("gone", api.List{ID: "made", Name: "Gone", Role: "owner"})
 	queued := len(b.st.Deleted) == 1 && b.st.Deleted[0].ID == "made"
 	b.mu.Unlock()
 	if !queued {
 		t.Error("a list deleted while it was being made is left on the service")
+	}
+
+	// But one bound already, by another copy of evado that sent the same
+	// id, is the same list, and stays.
+	b.mu.Lock()
+	b.bindList("tmp", api.List{ID: "real", Name: "As sent", Role: "owner"})
+	kept := b.list("real") != nil && len(b.st.Deleted) == 1
+	b.mu.Unlock()
+	if !kept {
+		t.Error("a list made once and bound twice is queued for deletion")
 	}
 }
 

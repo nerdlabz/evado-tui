@@ -136,6 +136,13 @@ type List struct {
 	Members []api.Member `json:"members,omitempty"`
 	// Local means the service has not been told about this list yet.
 	Local bool `json:"local,omitempty"`
+	// CreateID is the id the service is asked to give a Local list. It is
+	// chosen and saved before the first attempt, so an attempt whose answer
+	// or save was lost is sent again with the same id and finds the list it
+	// made instead of making a second. The list's own id is not used: one
+	// brought in by an import came from somewhere else. A file without it,
+	// from an older evado, gets one on its next sync.
+	CreateID string `json:"createId,omitempty"`
 	// Renamed means the name here has not reached the service, which still
 	// calls the list Was. A refused rename goes back to Was.
 	Renamed bool   `json:"renamed,omitempty"`

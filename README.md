@@ -393,6 +393,12 @@ The Account tab has two ways to leave, and they are not the same.
   request gets nothing applied at all, the sync stops sending, finishes
   reading what the server has, reports that it will carry on next time, and
   the todos wait for the next sync.
+- A list you make while offline is created on the server at the next sync
+  with an id this computer chose and saved first. If the answer is lost, or
+  the file cannot be saved after it, the next sync asks for that id again
+  and gets the same list, not a second one. If the list was deleted
+  elsewhere in between, it is not made again: it goes from here as any list
+  deleted elsewhere does, below.
 - A list you delete while offline is deleted on the server at the next sync,
   after the todos you moved out of it have been moved. If the server turns a
   move down, the list is not deleted: it comes back, with the todo, and the

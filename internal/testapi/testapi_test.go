@@ -43,3 +43,33 @@ func TestPatchRefusesTimestampsWithoutAnOffset(t *testing.T) {
 		}
 	}
 }
+
+// Creating a list with an id of its own is safe to send again, and refuses
+// an id it may not use or one of a deleted list, as the service does.
+func TestCreatingAListWithAnIDIsSafeToRepeat(t *testing.T) {
+	f := New()
+	f.ForeignLists = []string{"theirs"}
+	f.DeletedLists = []string{"gone"}
+	c := f.Client(t)
+	ctx := context.Background()
+
+	made, err := c.CreateListWithID(ctx, "mine", "Trip")
+	if err != nil || made.ID != "mine" || made.Name != "Trip" {
+		t.Fatalf("first create = %+v, %v", made, err)
+	}
+	again, err := c.CreateListWithID(ctx, "mine", "Holiday")
+	if err != nil || again.ID != "mine" || again.Name != "Trip" || len(f.Lists) != 3 {
+		t.Errorf("repeat = %+v, %v, %d lists; want the same list, unrenamed", again, err, len(f.Lists))
+	}
+	for id, code := range map[string]string{"theirs": api.CodeIDConflict, "l1": api.CodeIDConflict, "gone": api.CodeListDeleted} {
+		if _, err := c.CreateListWithID(ctx, id, "Trip"); api.CodeOf(err) != code {
+			t.Errorf("create with %s = %v, want %s", id, err, code)
+		}
+	}
+	if none, err := c.CreateList(ctx, "Trip"); err != nil || none.ID == "" || none.ID == "mine" {
+		t.Errorf("create without an id = %+v, %v, want a new id", none, err)
+	}
+	if len(f.Lists) != 4 {
+		t.Errorf("lists = %+v, want one made with the id and one without", f.Lists)
+	}
+}

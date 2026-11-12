@@ -64,6 +64,12 @@ const (
 	// CodeTooManyLines refuses a capture of more lines than one request
 	// may hold. The answer has limit and lines, and nothing was created.
 	CodeTooManyLines = "too_many_lines"
+
+	// What creating a list with an id of its own can be refused for: the
+	// id is not this account's to use, or it was a list that has since
+	// been deleted. See CreateListWithID.
+	CodeIDConflict  = "id_conflict"
+	CodeListDeleted = "list_deleted"
 )
 
 // FieldError names one offending field of a validation failure.
@@ -723,14 +729,26 @@ func (c *Client) ListLists(ctx context.Context) ([]List, error) {
 	return out.Lists, err
 }
 
-// CreateList creates a list.
+// CreateList creates a list, with an id the service chooses.
 func (c *Client) CreateList(ctx context.Context, name string) (List, error) {
+	return c.CreateListWithID(ctx, "", name)
+}
+
+// CreateListWithID creates a list with an id chosen here, a UUID, which
+// makes the create safe to send again: an id of a list the account owns
+// answers that list as it is now, even under another name, and nothing
+// new is made. An id that is not the account's to use is refused with
+// CodeIDConflict, and that of a list deleted since with CodeListDeleted;
+// a deleted list is never brought back. An empty id leaves the choice to
+// the service.
+func (c *Client) CreateListWithID(ctx context.Context, id, name string) (List, error) {
 	var out struct {
 		List List `json:"list"`
 	}
 	body := struct {
+		ID   string `json:"id,omitempty"`
 		Name string `json:"name"`
-	}{Name: name}
+	}{ID: id, Name: name}
 	_, err := c.do(ctx, http.MethodPost, "/lists", body, &out)
 	return out.List, err
 }

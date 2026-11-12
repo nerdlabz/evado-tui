@@ -47,6 +47,14 @@ type service struct {
 	// calls is every request that changed lists or todos, as method and
 	// path, in the order they came.
 	calls []string
+	// listIDs is the id each POST /lists asked for, empty for none.
+	// deletedLists are the lists deleted, whose ids the service refuses to
+	// make again, and foreignLists ids of lists other accounts own.
+	listIDs                    []string
+	deletedLists, foreignLists map[string]bool
+	// listMade runs when POST /lists has made a list, before the answer
+	// goes out.
+	listMade func()
 	// got is every change received, in order.
 	got []map[string]json.RawMessage
 	// members is who every list holds, for a test that cares; by default
@@ -97,6 +105,9 @@ func newService(t *testing.T) (*service, string) {
 		todos:     map[string]*wireTodo{},
 		clock:     time.Date(2030, 1, 1, 0, 0, 0, 0, time.UTC),
 		successor: map[string]string{},
+
+		deletedLists: map[string]bool{},
+		foreignLists: map[string]bool{},
 	}
 	srv := httptest.NewServer(http.HandlerFunc(s.serve))
 	t.Cleanup(srv.Close)
@@ -170,19 +181,44 @@ func (s *service) serve(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(s.listStatus)
 		write(map[string]any{"error": "no list for you", "code": "refused"})
 	case r.URL.Path == "/lists" && r.Method == http.MethodPost:
-		var body struct{ Name string }
+		var body struct{ ID, Name string }
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		s.calls = append(s.calls, "POST /lists "+body.Name)
+		s.listIDs = append(s.listIDs, body.ID)
+		// Like the service: an id is checked before the limits, so a
+		// repeat of a create that worked answers the list as it is now.
+		if body.ID != "" {
+			i := s.listAt(body.ID)
+			switch {
+			case i >= 0 && s.lists[i].Role == "owner" && !s.lists[i].IsPersonal:
+				write(map[string]any{"list": s.lists[i], "idempotent": true})
+				return
+			case i >= 0 || s.foreignLists[body.ID]:
+				w.WriteHeader(http.StatusConflict)
+				write(map[string]any{"error": "that id is in use", "code": api.CodeIDConflict})
+				return
+			case s.deletedLists[body.ID]:
+				w.WriteHeader(http.StatusGone)
+				write(map[string]any{"error": "that list was deleted", "code": api.CodeListDeleted})
+				return
+			}
+		}
 		if len(s.lists) >= 25 {
 			w.WriteHeader(http.StatusBadRequest)
 			write(map[string]any{"error": "too many lists", "code": "invalid_request"})
 			return
 		}
-		l := api.List{ID: "remote-" + strings.ToLower(body.Name), Name: body.Name, Role: "owner"}
-		for s.listAt(l.ID) >= 0 {
-			l.ID += "-again"
+		l := api.List{ID: body.ID, Name: body.Name, Role: "owner"}
+		if l.ID == "" {
+			l.ID = "remote-" + strings.ToLower(body.Name)
+			for s.listAt(l.ID) >= 0 {
+				l.ID += "-again"
+			}
 		}
 		s.lists = append(s.lists, l)
+		if s.listMade != nil {
+			s.listMade()
+		}
 		w.WriteHeader(http.StatusCreated)
 		write(map[string]any{"list": l})
 	case r.URL.Path == "/sync":
@@ -370,6 +406,7 @@ func (s *service) dropList(id string) {
 	if i := s.listAt(id); i >= 0 {
 		s.lists = append(s.lists[:i], s.lists[i+1:]...)
 	}
+	s.deletedLists[id] = true
 }
 
 // leaveList takes the account out of a list, as the owner removing it or
@@ -739,7 +776,7 @@ func TestSignInSendsLocalTodosUp(t *testing.T) {
 				t.Errorf("personal todo went to %q, want the account's personal list", todo.ListID)
 			}
 		case "Write the report":
-			if todo.ListID != "remote-work" {
+			if l := svc.named("Work"); l == nil || todo.ListID != l.ID {
 				t.Errorf("list todo went to %q, want the list made in the account", todo.ListID)
 			}
 		}
@@ -1242,7 +1279,7 @@ func TestListCreationFailureIsReportedAndRetried(t *testing.T) {
 			if _, err := b.Sync(ctx); err != nil {
 				t.Fatal(err)
 			}
-			if got := svc.todos[held[0].ID]; got == nil || got.ListID != "remote-work" {
+			if got, l := svc.todos[held[0].ID], svc.named("Work"); got == nil || l == nil || got.ListID != l.ID {
 				t.Errorf("after the list could be made the todo is %+v, want it in the new list", got)
 			}
 			if st := b.Status(); st.Pending != 0 || st.Err != nil {

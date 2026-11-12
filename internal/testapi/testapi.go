@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -68,6 +69,13 @@ type API struct {
 	MeStatus int
 	// TZ is the account timezone /me reports. It is Europe/Madrid when empty.
 	TZ string
+	// ForeignLists are the ids of lists other accounts own, and DeletedLists
+	// those of lists deleted, which POST /lists refuses to make as the
+	// service does. ListCreates records the id each one asked for, empty
+	// for none.
+	ForeignLists, DeletedLists []string
+	ListCreates                []string
+	nextList                   int
 }
 
 // feedEpoch orders the change feed: a todo without an UpdatedAt changed one
@@ -245,7 +253,13 @@ func (f *API) Client(t *testing.T) *api.Client {
 		}
 		write(w, map[string]any{"user": api.User{ID: "u1", Email: "me@example.com", TZ: tz}, "lists": f.Lists})
 	})
-	mux.HandleFunc("/lists", func(w http.ResponseWriter, r *http.Request) { write(w, map[string]any{"lists": f.Lists}) })
+	mux.HandleFunc("/lists", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost {
+			f.createList(w, r)
+			return
+		}
+		write(w, map[string]any{"lists": f.Lists})
+	})
 	mux.HandleFunc("/lists/", func(w http.ResponseWriter, r *http.Request) { write(w, map[string]any{"members": f.Members}) })
 	mux.HandleFunc("/parse", func(w http.ResponseWriter, r *http.Request) { write(w, f.Parsed) })
 	mux.HandleFunc("/sync", func(w http.ResponseWriter, r *http.Request) {
@@ -646,4 +660,53 @@ func storedTitle(title string) string {
 // It does not cut one: only the sync route cuts, to the same 500 units.
 func tooLongForStep(title string) bool {
 	return len(utf16.Encode([]rune(title))) > 500
+}
+
+// createList answers POST /lists as the service does. An id makes the
+// create safe to send again: an unused one is the new list's, one of a list
+// the account owns answers that list as it is, even under another name, one
+// it may not use (another account's list, a list it is only a member of,
+// or its personal list) is a conflict, and one of a deleted list is gone
+// for good.
+func (f *API) createList(w http.ResponseWriter, r *http.Request) {
+	var body struct{ ID, Name string }
+	_ = json.NewDecoder(r.Body).Decode(&body)
+	f.ListCreates = append(f.ListCreates, body.ID)
+	answer := func(status int, v any) {
+		w.WriteHeader(status)
+		_ = json.NewEncoder(w).Encode(v)
+	}
+	if body.ID != "" {
+		for _, l := range f.Lists {
+			if l.ID != body.ID {
+				continue
+			}
+			if l.IsPersonal || l.ReadOnly || l.Role != "" && l.Role != "owner" {
+				answer(http.StatusConflict, map[string]any{"error": "that id is in use", "code": api.CodeIDConflict})
+				return
+			}
+			answer(http.StatusOK, map[string]any{"list": l, "idempotent": true})
+			return
+		}
+		switch {
+		case slices.Contains(f.ForeignLists, body.ID):
+			answer(http.StatusConflict, map[string]any{"error": "that id is in use", "code": api.CodeIDConflict})
+			return
+		case slices.Contains(f.DeletedLists, body.ID):
+			answer(http.StatusGone, map[string]any{"error": "that list was deleted", "code": api.CodeListDeleted})
+			return
+		}
+	}
+	name := strings.TrimSpace(body.Name)
+	if name == "" {
+		answer(http.StatusBadRequest, map[string]any{"error": "a list needs a name", "code": api.CodeInvalidRequest})
+		return
+	}
+	l := api.List{ID: body.ID, Name: name, Role: "owner"}
+	if l.ID == "" {
+		f.nextList++
+		l.ID = fmt.Sprintf("list%03d", f.nextList)
+	}
+	f.Lists = append(f.Lists, l)
+	answer(http.StatusCreated, map[string]any{"list": l})
 }
