@@ -15,11 +15,11 @@ jobs:
   build:
     # Release downloads must be public, and only this repository signs them.
     if: github.event.repository.private == false && github.repository == 'nerdlabz/evado-tui'
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     outputs:
       version: ${{ steps.version.outputs.value }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: useblacksmith/checkout@v1
       - name: Read version
         id: version
         env:
@@ -69,7 +69,7 @@ jobs:
 
   sign-macos:
     needs: build
-    runs-on: macos-latest
+    runs-on: blacksmith-6vcpu-macos-26
     environment: release
     steps:
       - uses: actions/download-artifact@v4
@@ -161,7 +161,7 @@ jobs:
 
   publish:
     needs: [build, sign-macos]
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: write
     steps:
