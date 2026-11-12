@@ -312,25 +312,58 @@ func (v *listsView) view(width, height int) string {
 	if !framed(width, height) {
 		return v.rows.render(width, func(i int, sel bool) string { return v.row(i, sel, width-1) })
 	}
-	// The lists sit beside the selected one's details; a narrow terminal
-	// stacks them instead.
-	leftW, leftH := min(max(width*2/5, 32), 52), height
-	if width < 72 {
-		leftW, leftH = width, min(max(len(v.items)+2, 5), max(height/2, 5))
-	}
-	v.rows.setHeight(max(leftH-2, 1))
-	left := frame(v.rows.render(leftW-2, func(i int, sel bool) string {
-		return v.row(i, sel, leftW-3)
-	}), leftW, leftH, frameOpts{title: "Lists", foot: v.summary(), focused: m.focus != focusMembers})
+	l := v.layout(width, height)
+	v.rows.setHeight(max(l.leftH-2, 1))
+	left := frame(v.rows.render(l.leftW-2, func(i int, sel bool) string {
+		return v.row(i, sel, l.leftW-3)
+	}), l.leftW, l.leftH, frameOpts{title: "Lists", foot: v.summary(), focused: m.focus != focusMembers})
 
 	title := "List"
-	if l := v.selected(); l != nil {
-		title = l.Name
+	if sel := v.selected(); sel != nil {
+		title = sel.Name
 	}
-	if leftW == width {
-		return left + "\n" + frame(v.detailBody(width-2), width, height-leftH, frameOpts{title: title, focused: m.focus == focusMembers})
+	right := frame(v.detailBody(l.detailW-2), l.detailW, l.detailH, frameOpts{title: title, focused: m.focus == focusMembers})
+	if l.leftW == width {
+		return left + "\n" + right
 	}
-	return joinPanes(left, frame(v.detailBody(width-leftW-2), width-leftW, height, frameOpts{title: title, focused: m.focus == focusMembers}))
+	return joinPanes(left, right)
+}
+
+// listsLayout is how the Lists tab divides the screen: the lists, and the
+// selected one's details beside them or, on a narrow terminal, below.
+// A terminal too small for frames has room for the lists alone, and the
+// details get nothing.
+type listsLayout struct {
+	leftW, leftH     int
+	detailW, detailH int
+}
+
+func (v *listsView) layout(width, height int) listsLayout {
+	if !framed(width, height) {
+		return listsLayout{leftW: width, leftH: height}
+	}
+	if width < 72 {
+		leftH := min(max(len(v.items)+2, 5), max(height/2, 5))
+		return listsLayout{leftW: width, leftH: leftH, detailW: width, detailH: height - leftH}
+	}
+	leftW := min(max(width*2/5, 32), 52)
+	return listsLayout{leftW: leftW, leftH: height, detailW: width - leftW, detailH: height}
+}
+
+// membersInView reports whether any of the members shown in the details
+// would be drawn at this size. A short pane cuts them off the bottom.
+func (v *listsView) membersInView(width, height int) bool {
+	l := v.layout(width, height)
+	if l.detailW <= 0 || l.detailH <= 0 {
+		return false
+	}
+	// frame draws a border only when there is room for one.
+	rows, inner := l.detailH, l.detailW
+	if l.detailW >= 6 && l.detailH >= 3 {
+		rows, inner = l.detailH-2, l.detailW-2
+	}
+	_, at := v.detailLines(inner)
+	return at >= 0 && at < rows
 }
 
 func (v *listsView) row(i int, sel bool, width int) string {
@@ -374,10 +407,21 @@ func (v *listsView) row(i int, sel bool, width int) string {
 // detailBody is everything known about the selected list: who it belongs
 // to, how much is in it, its members, and the invite link just made.
 func (v *listsView) detailBody(width int) string {
+	if v.selected() == nil {
+		return "\n " + styFaint.Render("no lists yet · n makes one")
+	}
+	lines, _ := v.detailLines(width)
+	return strings.Join(lines, "\n")
+}
+
+// detailLines is the selected list's details a line at a time, and the
+// line its member rows start on, or -1 when none are shown.
+func (v *listsView) detailLines(width int) ([]string, int) {
 	m := v.m
 	l := v.selected()
+	membersAt := -1
 	if l == nil {
-		return "\n " + styFaint.Render("no lists yet · n makes one")
+		return nil, membersAt
 	}
 	tw := max(width-2, 8)
 	var b []string
@@ -431,6 +475,7 @@ func (v *listsView) detailBody(width int) string {
 			hint = "d leaves or removes"
 		}
 		add("", " "+label("members")+styFaint.Render("  "+hint))
+		membersAt = len(b)
 		v.memberRows.setItems(len(v.members))
 		add(v.memberRows.render(width, func(i int, sel bool) string {
 			return v.memberRow(v.members[i], sel && active, width-1)
@@ -445,7 +490,7 @@ func (v *listsView) detailBody(width int) string {
 			" "+styFaint.Render(fmt.Sprintf("valid for %dh · y copies again", v.invite.ExpiresIn/3600)))
 	}
 	add("", " "+styFaint.Render(shortID(l.ID)))
-	return strings.Join(b, "\n")
+	return b, membersAt
 }
 
 func (v *listsView) memberRow(mem api.Member, sel bool, width int) string {

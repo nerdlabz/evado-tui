@@ -22,6 +22,13 @@ func (m *Model) resize() {
 	m.listsV.setViewport(m.width, h)
 	m.syncV.setViewport(m.width, h)
 	m.acct.setViewport(m.width, h)
+	// A pane the terminal no longer has room for must not keep the
+	// keyboard, or keys would move and pick things that cannot be seen.
+	switch {
+	case m.focus == focusSidebar && m.todos.layout(m.width, h).sideW == 0,
+		m.focus == focusMembers && !m.listsV.membersInView(m.width, h):
+		m.focus = focusList
+	}
 	if m.help != nil {
 		m.help.width = max(m.width-8, 20)
 		m.help.height = max(m.height-8, 3)

@@ -56,6 +56,58 @@ func TestSidebarPassesOtherKeysToTheTodos(t *testing.T) {
 	}
 }
 
+// Narrowing the terminal takes the sidebar away, and its keys with it:
+// enter must not pick a list nobody can see.
+func TestSidebarLetsGoWhenAResizeHidesIt(t *testing.T) {
+	h := newHarness(t, sampleAPI())
+	h.press("h")
+	if h.model.focus != focusSidebar {
+		t.Fatalf("focus = %v, want the sidebar", h.model.focus)
+	}
+	h.send(tea.WindowSizeMsg{Width: 80, Height: 30})
+	h.mustNotContain("Views")
+	if h.model.focus != focusList {
+		t.Fatalf("focus = %v after the sidebar went, want the list", h.model.focus)
+	}
+	h.press("G", "enter")
+	if got := h.model.todos.filter.listID; got != "" {
+		t.Errorf("list filter = %q, want nothing picked out of sight", got)
+	}
+}
+
+func TestMemberPaneLetsGoWhenAResizeHidesIt(t *testing.T) {
+	f := sampleAPI()
+	f.members = []api.Member{
+		{UserID: "u1", Email: "demo@example.com", Role: "owner"},
+		{UserID: "u2", Email: "sam@example.com", Role: "member"},
+	}
+	h := newHarness(t, f)
+	h.press("2", "j", "m", "M")
+	if h.model.focus != focusMembers {
+		t.Fatalf("focus = %v, want members", h.model.focus)
+	}
+	// Just tall enough for the first member: the pane keeps the keyboard.
+	h.send(tea.WindowSizeMsg{Width: 100, Height: 12})
+	h.mustContain("demo@example.com")
+	if h.model.focus != focusMembers {
+		t.Fatalf("focus = %v with a member still showing, want members", h.model.focus)
+	}
+	// A row shorter, and the members are cut off the bottom.
+	h.send(tea.WindowSizeMsg{Width: 100, Height: 11})
+	h.mustNotContain("demo@example.com")
+	if h.model.focus != focusList {
+		t.Errorf("focus = %v with the members cut off, want the lists", h.model.focus)
+	}
+
+	// Stacked on a narrow terminal, the details may have no room at all.
+	h.send(tea.WindowSizeMsg{Width: 100, Height: 30})
+	h.press("M")
+	h.send(tea.WindowSizeMsg{Width: 20, Height: 30})
+	if h.model.focus != focusList {
+		t.Errorf("focus = %v with no details pane, want the lists", h.model.focus)
+	}
+}
+
 func TestBoardMovesATodoToToday(t *testing.T) {
 	f := sampleAPI()
 	h := newHarness(t, f)
