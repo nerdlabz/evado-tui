@@ -282,11 +282,21 @@ A day alone, in digits or in words, means the same for every flag:
 | `-due` | midnight that day, on the account's clock | that time |
 | `-remind` | midnight that day, on the account's clock | that time |
 
-If the words hold no usable date, nothing is saved and the error names the
-field. Turning words into a time also needs the account timezone. If it cannot
-be loaded, nothing is saved and the error says so, with the exit code of the
-failed request (for example 8 for a server error), or 2 if the timezone is not
-one this computer knows. An ISO date or time never needs it.
+If the words hold no usable date, or hold a repeat, which goes in `-repeat`
+instead, nothing is saved and the error names the field.
+
+A time with a UTC offset, such as `2026-03-10T15:00:00Z` or
+`2026-03-10T15:00:00-05:00`, is that instant. Any other time, in words or in
+digits such as `2026-03-10T15:00`, is on the account's clock, as is the
+midnight a day alone means for `-due` and `-remind`. `-day` keeps the date as
+written, except from a time with an offset: then it is the day that instant
+falls on in the account timezone, the day `-at` would put the same value on.
+
+So reading a date usually needs the account timezone. Only a time with an
+offset for `-at`, `-due` or `-remind`, and a date with no offset for `-day`,
+never need it. If it cannot be loaded, nothing is saved and the error says so,
+with the exit code of the failed request (for example 8 for a server error),
+or 2 if the timezone is not one this computer knows.
 
 ### Exit codes
 

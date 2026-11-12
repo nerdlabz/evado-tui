@@ -1,6 +1,7 @@
 package dates
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -103,8 +104,10 @@ func TestWire(t *testing.T) {
 		// A value that names its own offset is not read again.
 		{DueAt, "2026-03-30T15:00:00Z", "2026-03-30T15:00:00Z", false},
 		{Remind, "2026-03-30T15:00:00-05:00", "2026-03-30T15:00:00-05:00", false},
-		// The day field is only a day.
+		// The day field is only a day, on Madrid's calendar for an instant.
 		{Day, "2026-03-10T15:00:00+02:00", "2026-03-10", false},
+		{Day, "2026-03-10T23:30:00Z", "2026-03-11", false},
+		{Day, "2026-03-10T23:30", "2026-03-10", false},
 		{Day, "2026-03-10", "2026-03-10", false},
 		{Day, "15:04", "2026-03-28", false},
 		// A bare date has no time of day.
@@ -130,12 +133,27 @@ func TestNeedsZone(t *testing.T) {
 		{Remind, "2026-03-10T15:00:00+01:00", false},
 		{Day, "2026-03-10", false},
 		{Day, "2026-03-10T15:00", false},
+		{Day, "2026-03-10T15:00:00Z", true},
 		{Day, "15:04", true},
 	}
 	for _, c := range cases {
 		if got := NeedsZone(c.field, c.in); got != c.want {
 			t.Errorf("NeedsZone(%s, %q) = %v want %v", c.field, c.in, got, c.want)
 		}
+	}
+}
+
+func TestParseProblemNamesTheField(t *testing.T) {
+	rule := "FREQ=WEEKLY"
+	pv := api.ParsePreview{RecurrenceRule: &rule}
+	for _, field := range []string{Day, DoAt, DueAt, Remind} {
+		err := ParseProblem(field, "friday weekly", pv)
+		if err == nil || !strings.Contains(err.Error(), Label(field)) || !strings.Contains(err.Error(), "repeat") {
+			t.Errorf("%s: %v, want the field and the repeat named", field, err)
+		}
+	}
+	if err := ParseProblem(DueAt, "friday", api.ParsePreview{}); err != nil {
+		t.Errorf("words with no repeat: %v", err)
 	}
 }
 

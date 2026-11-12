@@ -79,10 +79,11 @@ func clockOnly(norm string) bool {
 // write norm for field. A caller that must fetch the zone can skip the
 // request when this is false.
 func NeedsZone(field, norm string) bool {
-	if field == Day {
-		return clockOnly(norm)
-	}
 	_, err := time.Parse(time.RFC3339, norm)
+	if field == Day {
+		// The day an instant falls on depends on whose calendar it is.
+		return clockOnly(norm) || err == nil
+	}
 	return err != nil
 }
 
@@ -90,24 +91,31 @@ func NeedsZone(field, norm string) bool {
 // The service refuses a date and time without a UTC offset, so one that has
 // none is read on loc's clock and given loc's offset on that date, which
 // matters across a daylight-saving change. A value that already carries Z
-// or an offset is sent as it is. The day field takes only YYYY-MM-DD. A
-// bare date for any other field has no time of day; dateOnly says so, and
-// the value is then midnight on loc's clock, the day the service stores.
+// or an offset is sent as it is. The day field takes only YYYY-MM-DD: the
+// day on loc's calendar for a value with an offset, as words that name a
+// time give it, so that a do day and a do time given the same instant
+// agree, and the date as written otherwise. A bare date for any other
+// field has no time of day; dateOnly says so, and the value is then
+// midnight on loc's clock, the day the service stores.
 func Wire(field, norm string, loc *time.Location, now time.Time) (val string, dateOnly bool) {
 	if clockOnly(norm) {
 		norm = now.In(loc).Format("2006-01-02") + "T" + norm
 	}
+	t, err := time.Parse(time.RFC3339, norm)
 	if field == Day {
+		if err == nil {
+			return t.In(loc).Format("2006-01-02"), false
+		}
 		return norm[:10], false
 	}
-	if t, err := time.Parse(time.RFC3339, norm); err == nil {
+	if err == nil {
 		return t.Format(time.RFC3339), false
 	}
 	layout, dateOnly := "2006-01-02T15:04", false
 	if !strings.Contains(norm, "T") {
 		layout, dateOnly = "2006-01-02", true
 	}
-	t, err := time.ParseInLocation(layout, norm, loc)
+	t, err = time.ParseInLocation(layout, norm, loc)
 	if err != nil {
 		return norm, dateOnly
 	}
@@ -191,7 +199,7 @@ func FromParse(field string, pv api.ParsePreview, loc *time.Location) (val strin
 // ParseProblem explains why words cannot be used in a single date field.
 func ParseProblem(field, text string, pv api.ParsePreview) error {
 	if pv.RecurrenceRule != nil && *pv.RecurrenceRule != "" {
-		return fmt.Errorf("%q includes a repeat; set the repeat separately with -repeat or the Repeat field", text)
+		return fmt.Errorf("%q includes a repeat, which a %s cannot hold; set the repeat separately with -repeat or the Repeat field", text, Label(field))
 	}
 	return nil
 }

@@ -672,8 +672,8 @@ func (o *Ops) Edit(ctx context.Context, ref string, in EditInput) (Change, error
 // or in words, so it has no time of day.
 func (o *Ops) readDate(ctx context.Context, field, text string) (val string, dateOnly bool, err error) {
 	if norm, ok := dates.Normalise(text); ok {
-		// The zone is fetched only when it matters, so a value with its own
-		// offset costs no request.
+		// The zone is fetched only when it matters, so a time with its own
+		// offset, or a date for the do day, costs no request.
 		loc := time.UTC
 		if dates.NeedsZone(field, norm) {
 			if loc, err = o.Location(ctx); err != nil {

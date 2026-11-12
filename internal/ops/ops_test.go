@@ -277,8 +277,8 @@ func TestEditNeedsNoTimezoneWhenTheValueIsNotReadInOne(t *testing.T) {
 	if string(p["doAt"]) != `"2026-03-10T15:00:00Z"` || string(p["dueAt"]) != `"2026-03-10T15:00:00-05:00"` {
 		t.Errorf("values with their own offset must be sent as given: %v", p)
 	}
-	// A day given with a time is only the day, whatever its offset.
-	dayAt := "2026-03-10T23:30:00-05:00"
+	// A do day given a time with no offset is the date as written.
+	dayAt := "2026-03-10T23:30"
 	if _, err := o.Edit(ctx, "aaa222", EditInput{Day: &dayAt}); err != nil {
 		t.Fatal(err)
 	}
@@ -288,6 +288,10 @@ func TestEditNeedsNoTimezoneWhenTheValueIsNotReadInOne(t *testing.T) {
 	local := "2026-03-10T15:00"
 	if _, err := o.Edit(ctx, "aaa222", EditInput{Due: &local}); ExitCode(err) != ExitServer || !strings.Contains(err.Error(), "timezone") {
 		t.Errorf("a time with no offset needs the account timezone: %v", err)
+	}
+	// An instant falls on a day of the account's calendar.
+	if _, err := o.Edit(ctx, "aaa222", EditInput{Day: &offset}); ExitCode(err) != ExitServer || !strings.Contains(err.Error(), "timezone") {
+		t.Errorf("a do day given a time with an offset needs the account timezone: %v", err)
 	}
 	if _, err := o.Edit(ctx, "aaa222", EditInput{Day: &words}); err != nil {
 		t.Fatal(err)
@@ -326,6 +330,31 @@ func TestEditWritesOffsetsOnTheAccountClock(t *testing.T) {
 		}
 		if string(p["hasTime"]) != "true" {
 			t.Errorf("%s: hasTime = %s, want true", c.in, p["hasTime"])
+		}
+	}
+}
+
+// A do day given an instant is the day it falls on for the account, the
+// day a do time given the same instant shows on, and the day words for it
+// would give.
+func TestEditDayTakesTheAccountDayOfAnInstant(t *testing.T) {
+	f := testapi.New() // Europe/Madrid, an hour ahead of UTC in March
+	o := ops(t, f)
+	ctx := context.Background()
+	cases := []struct{ in, want string }{
+		{"2026-03-10T23:30:00Z", "2026-03-11"},
+		{"2026-03-10T23:30:00-05:00", "2026-03-11"},
+		{"2026-03-11T00:30:00+02:00", "2026-03-10"},
+		{"2026-03-10T15:00:00+02:00", "2026-03-10"},
+		{"2026-03-10T23:30", "2026-03-10"},
+	}
+	for _, c := range cases {
+		in := c.in
+		if _, err := o.Edit(ctx, "aaa222", EditInput{Day: &in}); err != nil {
+			t.Fatalf("%s: %v", c.in, err)
+		}
+		if got := string(f.Patches[len(f.Patches)-1]["scheduledDay"]); got != `"`+c.want+`"` {
+			t.Errorf("%s: scheduledDay = %s, want %s", c.in, got, c.want)
 		}
 	}
 }
