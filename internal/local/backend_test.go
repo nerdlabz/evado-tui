@@ -77,6 +77,9 @@ type service struct {
 	// way deferAs says. See deferred_test.go.
 	capacity func(call, n int) int
 	deferAs  string
+	// stray is added to the errors of every /sync, as a service that
+	// misreports would.
+	stray []api.SyncError
 	// accepted is the acceptDeferred each /sync carried, and requests the
 	// ids it pushed, both in order.
 	accepted []bool
@@ -262,6 +265,7 @@ func (s *service) serve(w http.ResponseWriter, r *http.Request) {
 				errs = append(errs, api.SyncError{ID: id, Error: msg})
 			}
 		}
+		errs = append(errs, s.stray...)
 		if s.during != nil {
 			s.during()
 		}

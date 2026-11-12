@@ -339,9 +339,19 @@ func (b *Backend) uploadImports(ctx context.Context, remote *api.Client, res *Re
 			for i, sent := range batch {
 				if reason := refused[i+1]; reason != "" {
 					b.mu.Lock()
-					if cur := b.find(sent.ID); cur != nil && cur.New && cur.ImportedID == sent.ImportedID {
-						cur.Refused = reason
-						res.Refused = append(res.Refused, cur.Title)
+					index := slices.IndexFunc(b.st.Todos, func(t Todo) bool {
+						return t.ID == sent.ID && t.New && t.ImportedID == sent.ImportedID
+					})
+					if index >= 0 {
+						if cur := &b.st.Todos[index]; cur.DeletedAt != nil {
+							// Deleted here while it waited, and the service did not
+							// take it, so there is nothing left to tell. Kept, it
+							// would go up and be refused again on every sync.
+							b.drop(cur.ID)
+						} else {
+							cur.Refused = reason
+							res.Refused = append(res.Refused, cur.Title)
+						}
 					}
 					err := b.persist()
 					b.mu.Unlock()
@@ -833,7 +843,10 @@ func (b *Backend) exchange(ctx context.Context, remote *api.Client, res *Result)
 // refusals and the ids it left unapplied. A deferral is not a refusal: the
 // change was never tried, so it stays pending and goes again. The service
 // lists them in deferred; one it put in errors instead is told by its code
-// or message. Ids that were not in this push are ignored.
+// or message. Ids that were not in this push are ignored, and so is a
+// refusal of one also left unapplied, which settle keeps pending; each
+// refused id is there once, with the last reason given, so the refusals
+// can be counted against the push.
 func splitDeferred(sent map[string]Todo, ans syncAnswer) (refusals []api.SyncError, left map[string]bool) {
 	left = map[string]bool{}
 	for _, d := range ans.Deferred {
@@ -842,11 +855,21 @@ func splitDeferred(sent map[string]Todo, ans syncAnswer) (refusals []api.SyncErr
 		}
 	}
 	for _, e := range ans.Errors {
-		if !e.Deferred() {
-			refusals = append(refusals, e)
-		} else if _, ok := sent[e.ID]; ok {
+		if _, ok := sent[e.ID]; ok && e.Deferred() {
 			left[e.ID] = true
 		}
+	}
+	at := map[string]int{}
+	for _, e := range ans.Errors {
+		if _, ok := sent[e.ID]; !ok || e.Deferred() || left[e.ID] {
+			continue
+		}
+		if i, again := at[e.ID]; again {
+			refusals[i] = e
+			continue
+		}
+		at[e.ID] = len(refusals)
+		refusals = append(refusals, e)
 	}
 	return refusals, left
 }

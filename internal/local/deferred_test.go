@@ -113,6 +113,27 @@ func TestDeferredErrorsAreNotRefusals(t *testing.T) {
 	}
 }
 
+// What the service says about ids it was not sent, or says twice, does not
+// change how many changes count as pushed.
+func TestPushedCountsOnlyTheChangesSent(t *testing.T) {
+	ctx := context.Background()
+	svc, url := newService(t)
+	b, ids := pendingTodos(t, svc, url, 3)
+	svc.refuse = ids[0]
+	svc.stray = []api.SyncError{
+		{ID: "never-sent", Error: "unknown todo"},
+		{ID: ids[0], Error: "list is read-only"},
+	}
+
+	res, err := b.Sync(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Pushed != 2 || len(res.Refused) != 1 {
+		t.Errorf("pushed %d, refused %v, want 2 pushed and one refused", res.Pushed, res.Refused)
+	}
+}
+
 // Another message that merely mentions the words is still a refusal.
 func TestAnErrorWithoutTheDeferredMarkIsStillARefusal(t *testing.T) {
 	for _, e := range []api.SyncError{

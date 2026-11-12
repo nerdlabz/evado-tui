@@ -21,6 +21,9 @@ type importService struct {
 	failAfter    bool
 	hideReads    bool
 	duringImport func()
+	// refuse turns down the todos with these ids in the file, for the
+	// reason given.
+	refuse map[string]string
 }
 
 // The importer skips account ids atomically and copies inaccessible ids. The
@@ -42,7 +45,12 @@ func newImportService(t *testing.T) (*importService, string) {
 				return
 			}
 			report := api.ImportResult{Complete: true, Refused: []api.ImportRefusal{}}
-			for _, in := range ex.Todos {
+			for item, in := range ex.Todos {
+				if why := s.refuse[in.ID]; why != "" {
+					report.Refused = append(report.Refused, api.ImportRefusal{Item: item + 1, Kind: "todo", ID: in.ID, Reason: why})
+					report.RefusedCount++
+					continue
+				}
 				id := in.ID
 				if s.foreign[id] {
 					id = importedCopyID(s.user.ID, id)
@@ -311,6 +319,38 @@ func TestImportedDeleteAfterFailedUploadRetriesDeletion(t *testing.T) {
 	res, err := b.Import(ex)
 	if err != nil || res.SkippedDeleted != 1 {
 		t.Fatalf("deleted alias %+v %v", res, err)
+	}
+}
+
+// An imported todo deleted here while its upload was on the way, which the
+// service then turned down, is not in the account and is not wanted here.
+// It goes, rather than going up again on every sync.
+func TestRefusedImportDeletedDuringUploadIsNotSentAgain(t *testing.T) {
+	s, url := newImportService(t)
+	b := syncedAt(t, filepath.Join(t.TempDir(), "todos.json"), url)
+	ex := importFixture(t, b)
+	sourceID := ex.Todos[0].ID
+	s.refuse = map[string]string{sourceID: "too many todos"}
+	s.duringImport = func() {
+		if err := b.Client().DeleteTodo(context.Background(), sourceID); err != nil {
+			t.Error(err)
+		}
+	}
+	if res := mustSync(t, b); len(res.Refused) != 0 {
+		t.Errorf("refused = %v, want nothing reported for a todo deleted here", res.Refused)
+	}
+	mustSync(t, b)
+	if s.imports != 1 {
+		t.Errorf("imports = %d, want the refused todo sent once", s.imports)
+	}
+	if st := b.Status(); st.Pending != 0 || st.Refused != 0 {
+		t.Errorf("status = %+v, want nothing pending or refused", st)
+	}
+	if len(b.st.Todos) != 0 {
+		t.Errorf("todos here = %+v, want none", b.st.Todos)
+	}
+	if res, err := b.Import(ex); err != nil || res.Added != 0 {
+		t.Errorf("importing the file again = %+v %v, want the deletion kept", res, err)
 	}
 }
 
