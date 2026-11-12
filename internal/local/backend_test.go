@@ -81,6 +81,9 @@ type service struct {
 	// ids it pushed, both in order.
 	accepted []bool
 	requests [][]string
+	// sinces is the cursor each /sync started from, and cursors the one
+	// each answered with, both in order.
+	sinces, cursors []string
 }
 
 func newService(t *testing.T) (*service, string) {
@@ -194,6 +197,7 @@ func (s *service) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		s.accepted = append(s.accepted, body.AcceptDeferred)
+		s.sinces = append(s.sinces, body.Since)
 		var pushed []string
 		for _, ch := range body.Changes {
 			var id string
@@ -289,7 +293,9 @@ func (s *service) serve(w http.ResponseWriter, r *http.Request) {
 			}
 			lists = append(lists, wireList{List: l, Members: members})
 		}
-		answer := map[string]any{"todos": out, "lists": lists, "cursor": strconv.FormatInt(s.tick().UnixMilli(), 10), "hasMore": s.syncs <= s.moreSyncs, "errors": errs}
+		cursor := strconv.FormatInt(s.tick().UnixMilli(), 10)
+		s.cursors = append(s.cursors, cursor)
+		answer := map[string]any{"todos": out, "lists": lists, "cursor": cursor, "hasMore": s.syncs <= s.moreSyncs, "errors": errs}
 		if len(deferred) > 0 {
 			answer["deferred"] = deferred
 		}

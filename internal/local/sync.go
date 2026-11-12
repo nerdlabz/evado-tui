@@ -715,6 +715,12 @@ func reason(err error) string {
 // until there is nothing left either way.
 func (b *Backend) exchange(ctx context.Context, remote *api.Client, res *Result) error {
 	initial, complete := false, false
+	// pulled is how far a first pull has read. It stays out of the file
+	// until the pull reaches the end: a cursor there means the account was
+	// read in full, and the next sync would then never prune what the
+	// account no longer holds. A first pull that stops, whether on an
+	// error, at the round limit or with the program, so starts over.
+	pulled := ""
 	seen := map[string]bool{}
 	var turnedDown []string
 	b.mu.Lock()
@@ -730,14 +736,6 @@ func (b *Backend) exchange(ctx context.Context, remote *api.Client, res *Result)
 		// Edits still awaiting a pull are pending in the file, and go up
 		// again next time.
 		b.awaiting, b.pushes = nil, nil
-		// A first pull that did not finish leaves the cursor where it got
-		// to, and the next sync would take that for an account already read
-		// in full and never prune. Starting over is the only way to know
-		// which todos the account really holds.
-		if initial && !complete {
-			b.st.Cursor = ""
-			_ = b.persist()
-		}
 		b.mu.Unlock()
 	}()
 	// stalled means a round got nothing applied because the service
@@ -755,6 +753,8 @@ func (b *Backend) exchange(ctx context.Context, remote *api.Client, res *Result)
 		b.mu.Unlock()
 		if round == 0 {
 			initial = since == ""
+		} else if initial {
+			since = pulled
 		}
 
 		// acceptDeferred makes a service that cuts a large push short say
@@ -786,7 +786,11 @@ func (b *Backend) exchange(ctx context.Context, remote *api.Client, res *Result)
 			res.InvitationsChanged = true
 		}
 		res.Pulled += len(ans.Todos)
-		if ans.Cursor != "" {
+		switch {
+		case ans.Cursor == "":
+		case initial:
+			pulled = ans.Cursor
+		default:
 			b.st.Cursor = ans.Cursor
 		}
 		more := ans.HasMore || !stalled && b.hasPending()
@@ -808,6 +812,9 @@ func (b *Backend) exchange(ctx context.Context, remote *api.Client, res *Result)
 	defer b.mu.Unlock()
 	b.confirm()
 	if initial {
+		if pulled != "" {
+			b.st.Cursor = pulled
+		}
 		// A first pull is everything the account holds, so a todo here
 		// that the service knows about and did not send is gone there.
 		kept := b.st.Todos[:0]
