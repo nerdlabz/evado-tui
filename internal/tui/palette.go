@@ -128,10 +128,17 @@ func newPalette(width int, extra []paletteEntry) *palette {
 	ti.Focus()
 	p := &palette{
 		entries: append(append([]paletteEntry{}, paletteEntries...), extra...),
-		input:   ti, width: min(max(width-8, 30), 72), visibleN: 12,
+		input:   ti, width: paletteWidth(width), visibleN: 12,
 	}
 	p.filter()
 	return p
+}
+
+// paletteWidth is how wide the palette is drawn on a screen this wide: a
+// margin either side where there is room, and never wider than the screen,
+// which would cut off the keys on the right.
+func paletteWidth(screen int) int {
+	return max(min(screen-8, 72), min(screen, 30))
 }
 
 // filter keeps the entries containing every word typed, in list order.

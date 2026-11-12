@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/nerdlabz/evado-tui/internal/api"
 )
 
 func mustTime(t *testing.T, value string) time.Time {
@@ -124,6 +126,21 @@ func TestWrapText(t *testing.T) {
 	}
 }
 
+// A word wider than the line, such as a pasted link in a todo's notes, is
+// broken across lines instead of running past the edge of the pane.
+func TestWrapTextBreaksAWordWiderThanTheLine(t *testing.T) {
+	got := wrapText("see https://example.com/a/long/path ok", 10)
+	want := []string{"see", "https://ex", "ample.com/", "a/long/pat", "h ok"}
+	if strings.Join(got, "|") != strings.Join(want, "|") {
+		t.Errorf("wrapText = %q, want %q", got, want)
+	}
+	for _, line := range wrapText("日本語のとても長い単語です", 7) {
+		if w := visibleWidth(line); w > 7 {
+			t.Errorf("line %q is %d cells wide, want at most 7", line, w)
+		}
+	}
+}
+
 func TestPadToKeepsStyledWidth(t *testing.T) {
 	// lipgloss.Width counts display cells, so padding a styled string must
 	// not count the escape sequences.
@@ -160,5 +177,32 @@ func TestShortID(t *testing.T) {
 	}
 	if got := shortID("0123456789"); got != "01234567" {
 		t.Errorf("shortID = %q", got)
+	}
+}
+
+// A link pasted into a todo's notes is shown whole in the detail pane, its
+// end on the following lines rather than cut off at the pane's edge.
+func TestDetailShowsAllOfALongLinkInNotes(t *testing.T) {
+	h := newHarness(t, sampleAPI())
+	link := "https://example.com/" + strings.Repeat("segment/", 14) + "the-end"
+	todo := api.Todo{ID: "t9", ListID: "l1", Title: "Read this", Notes: &link}
+	const w = 60
+	var shown []string
+	inNotes := false
+	for _, line := range strings.Split(stripANSI(h.model.todos.todoCard(todo, nil, true, w, 20)), "\n") {
+		if visibleWidth(line) > w {
+			t.Errorf("line %q is wider than the pane's %d cells", line, w)
+		}
+		switch text := strings.TrimSpace(line); {
+		case strings.EqualFold(text, "notes"):
+			inNotes = true
+		case inNotes && text == "":
+			inNotes = false
+		case inNotes:
+			shown = append(shown, text)
+		}
+	}
+	if got := strings.Join(shown, ""); got != link {
+		t.Errorf("notes show %q, want the whole link %q", got, link)
 	}
 }

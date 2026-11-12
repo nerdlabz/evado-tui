@@ -19,6 +19,8 @@ type confirm struct {
 	// enter cannot delete anything.
 	armed bool
 	id    string
+	// width is the screen's, which the dialog has to fit inside.
+	width int
 }
 
 func newConfirm(id, title, body string, danger bool) *confirm {
@@ -65,14 +67,24 @@ func (c *confirm) view() string {
 	// sentence cannot push the dialog off the screen.
 	inner := max(visibleWidth(c.body)+2, 44)
 	inner = min(inner, 72)
-	body := lipgloss.NewStyle().Foreground(colMuted).Render(strings.Join(wrapText(c.body, inner), "\n"))
-	if c.danger && c.armed {
-		body += "\n\n" + styErr.Bold(true).Render("press enter again to confirm")
-	} else if c.danger {
-		body += "\n\n" + styFaint.Render("this cannot be undone")
+	if c.width > 0 {
+		// The border and padding take six cells. A box wider than the
+		// screen is cut off on the right, which is where the buttons are.
+		inner = max(min(inner, c.width-6), 15)
 	}
-	title := lipgloss.NewStyle().Foreground(tone).Bold(true).Render(c.title)
-	content := title + "\n\n" + body + "\n\n" + yes + "  " + no + "   " + styFaint.Render("y · n · esc")
+	wrap := func(s string) string { return strings.Join(wrapText(s, inner), "\n") }
+	body := lipgloss.NewStyle().Foreground(colMuted).Render(wrap(c.body))
+	if c.danger && c.armed {
+		body += "\n\n" + styErr.Bold(true).Render(wrap("press enter again to confirm"))
+	} else if c.danger {
+		body += "\n\n" + styFaint.Render(wrap("this cannot be undone"))
+	}
+	title := lipgloss.NewStyle().Foreground(tone).Bold(true).Render(wrap(c.title))
+	buttons := yes + "  " + no
+	if hint := "   " + styFaint.Render("y · n · esc"); visibleWidth(buttons+hint) <= inner {
+		buttons += hint
+	}
+	content := title + "\n\n" + body + "\n\n" + buttons
 	return styBox.BorderForeground(tone).Padding(1, 2).Render(padLines(content, inner))
 }
 

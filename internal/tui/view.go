@@ -32,6 +32,12 @@ func (m *Model) resize() {
 		m.help.width = max(m.width-8, 20)
 		m.help.height = max(m.height-8, 3)
 	}
+	if m.conf != nil {
+		m.conf.width = m.width
+	}
+	if m.palette != nil {
+		m.palette.width = paletteWidth(m.width)
+	}
 	if m.form != nil {
 		m.form.width = min(m.width-8, 78)
 		m.form.maxH = max(m.height-6, 10)

@@ -9,6 +9,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/nerdlabz/evado-tui/internal/local"
 )
@@ -712,7 +713,8 @@ func (f *form) result(cancel bool) formResult {
 }
 
 // wrapText breaks s into lines of at most w display cells, on word
-// boundaries where possible.
+// boundaries where possible. A word wider than a line, such as a pasted
+// link, is broken across lines, as otherwise its end would be cut off.
 func wrapText(s string, w int) []string {
 	if w < 1 {
 		return []string{""}
@@ -727,14 +729,19 @@ func wrapText(s string, w int) []string {
 			out = append(out, "")
 			continue
 		}
-		line := words[0]
-		for _, word := range words[1:] {
-			if lipgloss.Width(line)+1+lipgloss.Width(word) <= w {
+		line := ""
+		for _, word := range words {
+			switch {
+			case line == "":
+			case lipgloss.Width(line)+1+lipgloss.Width(word) <= w:
 				line += " " + word
 				continue
+			default:
+				out = append(out, line)
 			}
-			out = append(out, line)
-			line = word
+			pieces := strings.Split(ansi.Hardwrap(word, w, true), "\n")
+			out = append(out, pieces[:len(pieces)-1]...)
+			line = pieces[len(pieces)-1]
 		}
 		out = append(out, line)
 	}

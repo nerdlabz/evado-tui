@@ -985,6 +985,7 @@ func (m *Model) ask(id, title, body string, danger bool, onYes func() tea.Cmd) t
 // answered, and the new one must not carry the old one's no.
 func (m *Model) askOr(id, title, body string, danger bool, onYes, onNo func() tea.Cmd) tea.Cmd {
 	m.conf = newConfirm(id, title, body, danger)
+	m.conf.width = m.width
 	// "yes" is preselected so enter works, but a destructive prompt needs
 	// two presses, which is what stops a stray enter from deleting data.
 	m.conf.yes = true
