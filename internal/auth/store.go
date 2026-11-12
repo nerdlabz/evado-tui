@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/nerdlabz/evado-tui/internal/atomicfile"
 	"github.com/nerdlabz/evado-tui/internal/config"
 	"github.com/nerdlabz/evado-tui/internal/filelock"
 )
@@ -90,37 +91,11 @@ func (s *Store) load() (Credentials, bool, error) {
 // save replaces the session in one step, so a crash leaves either the old
 // pair or the new one and never half of each. The caller holds the lock.
 func (s *Store) save(c Credentials) error {
-	dir := filepath.Dir(s.path)
-	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return fmt.Errorf("create %s: %w", dir, err)
-	}
 	b, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, ".session-*.tmp")
-	if err != nil {
-		return fmt.Errorf("save session: %w", err)
-	}
-	defer func() { _ = os.Remove(tmp.Name()) }()
-	// CreateTemp makes the file 0600 already; saying so again guards
-	// against a platform that does otherwise.
-	if err := tmp.Chmod(0o600); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("save session: %w", err)
-	}
-	if _, err := tmp.Write(append(b, '\n')); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("save session: %w", err)
-	}
-	if err := tmp.Sync(); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("save session: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("save session: %w", err)
-	}
-	if err := os.Rename(tmp.Name(), s.path); err != nil {
+	if err := atomicfile.Write(s.path, append(b, '\n')); err != nil {
 		return fmt.Errorf("save session: %w", err)
 	}
 	return nil

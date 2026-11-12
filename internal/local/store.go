@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/nerdlabz/evado-tui/internal/api"
+	"github.com/nerdlabz/evado-tui/internal/atomicfile"
 	"github.com/nerdlabz/evado-tui/internal/config"
 )
 
@@ -334,19 +335,12 @@ func setAside(path, owner string, st State) (string, error) {
 	}
 }
 
-// save writes the file with owner-only permissions, through a temporary
-// file so a crash cannot leave half of one.
+// save writes the file with owner-only permissions, in one step so that
+// neither a crash nor a power cut can leave half of one.
 func save(path string, st State) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return err
-	}
 	b, err := json.Marshal(st)
 	if err != nil {
 		return err
 	}
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		return err
-	}
-	return os.Rename(tmp, path)
+	return atomicfile.Write(path, b)
 }

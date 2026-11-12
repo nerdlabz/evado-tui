@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/nerdlabz/evado-tui/internal/api"
+	"github.com/nerdlabz/evado-tui/internal/atomicfile"
 )
 
 // Config is the on-disk state, at $XDG_CONFIG_HOME/evado/config.json
@@ -171,20 +172,14 @@ func (c Config) Save() error {
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
-		return fmt.Errorf("create %s: %w", filepath.Dir(path), err)
-	}
 	b, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
 		return err
 	}
 	b = append(b, '\n')
-	// Write to a temp file first so a crash cannot truncate a good token.
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		return fmt.Errorf("write %s: %w", tmp, err)
-	}
-	if err := os.Rename(tmp, path); err != nil {
+	// In one step, so that a crash or a power cut cannot truncate a good
+	// token.
+	if err := atomicfile.Write(path, b); err != nil {
 		return fmt.Errorf("save %s: %w", path, err)
 	}
 	return nil

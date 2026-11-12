@@ -255,3 +255,53 @@ func TestQueuedListChangesSurviveACommandWritingInBetween(t *testing.T) {
 		t.Errorf("the command's todo on the service = %+v, want it in Holiday", svc.todos[made[0].ID])
 	}
 }
+
+// A save leaves the file whole and nothing beside it, and one that cannot
+// be put in place leaves no temporary copy of the todos lying around.
+func TestSaveLeavesOnlyTheFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "todos.json")
+	b, err := Open(path, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.Client().CreateTodos(context.Background(), api.NewTodo{Title: "Whole"}); err != nil {
+		t.Fatal(err)
+	}
+	st, err := load(path, time.Now())
+	if err != nil {
+		t.Fatalf("the saved file does not load: %v", err)
+	}
+	if len(st.Todos) != 1 || st.Todos[0].Title != "Whole" {
+		t.Errorf("saved todos = %+v", st.Todos)
+	}
+	others := func(dir string) []string {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []string
+		for _, e := range entries {
+			if n := e.Name(); n != "todos.json" && n != "todos.json.lock" {
+				out = append(out, n)
+			}
+		}
+		return out
+	}
+	if left := others(dir); len(left) != 0 {
+		t.Errorf("left beside the file: %v", left)
+	}
+
+	// A directory where the file goes makes the rename fail, after the
+	// todos were written out.
+	blocked := filepath.Join(t.TempDir(), "todos.json")
+	if err := os.MkdirAll(filepath.Join(blocked, "inside"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := save(blocked, st); err == nil {
+		t.Fatal("a save over a directory succeeded")
+	}
+	if left := others(filepath.Dir(blocked)); len(left) != 0 {
+		t.Errorf("a failed save left %v", left)
+	}
+}
