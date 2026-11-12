@@ -21,8 +21,6 @@ import (
 type accountView struct {
 	m *Model
 
-	rows table
-
 	sel int
 
 	tokens       []api.APIToken
@@ -49,9 +47,7 @@ type accountRow struct {
 }
 
 func newAccountView(m *Model) accountView {
-	v := accountView{m: m, memberCache: map[string][]api.Member{}}
-	v.rows.setItems(len(v.menu()))
-	return v
+	return accountView{m: m, memberCache: map[string][]api.Member{}}
 }
 
 // menu is the list of sections; the detail pane renders the selected one.
@@ -118,8 +114,6 @@ func (m *Model) lacksAccountScope() bool {
 	scope := m.session.Scope()
 	return scope != "" && !api.HasScope(scope, api.ScopeAccount)
 }
-
-func (v *accountView) setViewport(_, h int) { v.rows.setHeight(max(h, 1)) }
 
 func (v *accountView) load() tea.Cmd { return nil }
 
@@ -190,9 +184,6 @@ func (v *accountView) onKey(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "export":
 		switch k {
 		case "enter", "e":
-			if m.exportsFromComputer() {
-				return m, v.openExport(m)
-			}
 			return m, v.openExport(m)
 		case "y":
 			if v.exported != nil {
@@ -201,18 +192,15 @@ func (v *accountView) onKey(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	case "tokens":
 		switch k {
-		case "enter", "r":
+		case "enter":
 			m.busy = true
 			return m, tea.Batch(m.setBusy("listing tokens"), fetchTokens(m.ctx, m.client))
 		case "n":
-			if row.sessionOnly {
-				return m, m.warnf("minting tokens needs a browser session; the API rejects token auth with 403")
-			}
-			return m, v.openNewToken(m)
+			return m, m.warnf("minting tokens needs a browser session; the API rejects token auth with 403")
 		}
 	case "channels":
 		switch k {
-		case "enter", "r":
+		case "enter":
 			m.busy = true
 			return m, tea.Batch(m.setBusy("listing channels"), fetchChannels(m.ctx, m.client))
 		case "n":
@@ -403,13 +391,6 @@ func (v *accountView) openExport(m *Model) tea.Cmd {
 	}
 	dir, _ := dataDir()
 	f.field("path", "save to", filepath.Join(dir, "evado-export.json"), "leave empty to preview only")
-	return m.openForm(f)
-}
-
-func (v *accountView) openNewToken(m *Model) tea.Cmd {
-	f := newForm(formNewToken, "New API token", m.width)
-	f.note("hint", "Session-only endpoint. A pasted API token gets 403 here.")
-	f.field("name", "name", "evado-tui", "")
 	return m.openForm(f)
 }
 

@@ -119,7 +119,7 @@ func (v *listsView) onKey(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "n", "c":
 		return m, v.openNew(m)
-	case "e", "r":
+	case "e":
 		return m, v.openRename(m)
 	case "d":
 		return m, v.askDelete(m)
@@ -131,7 +131,7 @@ func (v *listsView) onKey(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, v.makeInvite(m)
 	case "I":
 		return m, v.inbox.show()
-	case "j-join", "J":
+	case "J":
 		return m, v.openJoin(m)
 	case "M":
 		// Capital M manages the members; plain tab still changes tabs, so

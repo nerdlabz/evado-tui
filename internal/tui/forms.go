@@ -25,8 +25,6 @@ const (
 	formExport     = "account.export"
 	formImport     = "account.import"
 	formDeleteAcct = "account.delete"
-	formNewToken   = "token.new"
-	formNewChannel = "channel.new"
 	formQuickAdd   = "todo.quick"
 	formAssignTodo = "todo.assign"
 	formMoveTodos  = "todo.move"
@@ -119,8 +117,6 @@ func (m *Model) applyForm(res formResult) (tea.Model, tea.Cmd) {
 			fmt.Sprintf("%s and its personal list will be gone. Shared lists you own stay read-only for their members.", m.user.Email),
 			true,
 			func() tea.Cmd { return deleteAccount(m.ctx, m.client, m.user.Email) })
-	case formNewToken:
-		return m, m.warnf("minting tokens needs a browser session; use the web app")
 	case formAssignTodo:
 		return m, m.assignTodo(v)
 	case formMoveTodos:
@@ -137,8 +133,6 @@ func (m *Model) applyForm(res formResult) (tea.Model, tea.Cmd) {
 		return m, m.todos.applyViewMenu(m, v["view"], v["do"])
 	case formRepairView:
 		return m, m.todos.applyRepair(m, res.orig["name"], v)
-	case formNewChannel:
-		return m, m.warnf("channels need a browser session; use the web app")
 	}
 	return m, nil
 }

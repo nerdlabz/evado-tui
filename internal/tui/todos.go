@@ -54,10 +54,6 @@ type todosView struct {
 	repair  *repairState
 	openSeq int
 
-	// doneOpen is set when the user asks to see every completed todo inside
-	// the Everything view.
-	doneOpen bool
-
 	// next is the cursor of the page after the last todo in all, empty when
 	// the list ends there. The view says there is more rather than imply it
 	// shows everything, and L reads the page next points at. loadedFor is

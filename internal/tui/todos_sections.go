@@ -89,14 +89,14 @@ func (v *todosView) arrange(keepID string) {
 		// order the API returned: a section that is not sorted is just a
 		// list.
 		v.sortSection(key, idxs)
-		if key == "done" && !v.doneOpen {
+		if key == "done" {
 			// The most recent completion is the one most likely to be the
 			// subject of "did that go through?".
 			idxs = idxs[max(len(idxs)-donePreview, 0):]
 			slices.Reverse(idxs)
 		}
 		hint := ""
-		if key == "done" && !v.doneOpen && len(buckets[key]) > len(idxs) {
+		if key == "done" && len(buckets[key]) > len(idxs) {
 			hint = "press f for all done"
 		}
 		heading := newSectionHeading(key)

@@ -21,7 +21,6 @@ func (m *Model) resize() {
 	m.todos.setViewport(m.width, h)
 	m.listsV.setViewport(m.width, h)
 	m.syncV.setViewport(m.width, h)
-	m.acct.setViewport(m.width, h)
 	// A pane the terminal no longer has room for must not keep the
 	// keyboard, or keys would move and pick things that cannot be seen.
 	switch {
