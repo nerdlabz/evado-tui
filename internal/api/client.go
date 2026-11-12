@@ -345,13 +345,11 @@ func redirectError(res *http.Response) *Error {
 func newError(res *http.Response, raw []byte) *Error {
 	e := &Error{
 		StatusCode: res.StatusCode,
-		Code:       strings.ToLower(strings.ReplaceAll(http.StatusText(res.StatusCode), " ", "_")),
+		Code:       statusCode(res.StatusCode),
 		Message:    http.StatusText(res.StatusCode),
 		RequestID:  res.Header.Get("X-Request-Id"),
+		RetryAfter: retryAfter(res.Header.Get("Retry-After"), time.Now()),
 		body:       raw,
-	}
-	if secs, err := strconv.Atoi(res.Header.Get("Retry-After")); err == nil {
-		e.RetryAfter = time.Duration(secs) * time.Second
 	}
 	var body struct {
 		Error  string       `json:"error"`
@@ -367,10 +365,45 @@ func newError(res *http.Response, raw []byte) *Error {
 		if body.ErrorDescription != "" {
 			e.Message = body.ErrorDescription
 		}
-		e.Code = body.Code
+		// A body with no code keeps the one the status gave, which
+		// callers branch on.
+		if body.Code != "" {
+			e.Code = body.Code
+		}
 		e.Fields = body.Fields
 	}
 	return e
+}
+
+// statusCode is the code an answer with no code of its own gets from its
+// status. Where the service has a code for that status it is used, so the
+// same condition has the same code whether or not the body was JSON.
+func statusCode(status int) string {
+	switch status {
+	case http.StatusTooManyRequests:
+		return CodeRateLimited
+	case http.StatusInternalServerError:
+		return CodeInternal
+	case http.StatusBadGateway, http.StatusServiceUnavailable, http.StatusGatewayTimeout:
+		return CodeUpstreamFailed
+	}
+	return strings.ToLower(strings.ReplaceAll(http.StatusText(status), " ", "_"))
+}
+
+// retryAfter reads a Retry-After header, in seconds or as an HTTP date.
+// A wait that is negative or already past is no wait at all, so a bad
+// header can never ask anyone to retry before now.
+func retryAfter(v string, now time.Time) time.Duration {
+	v = strings.TrimSpace(v)
+	var wait time.Duration
+	if secs, err := strconv.Atoi(v); err == nil {
+		wait = time.Duration(secs) * time.Second
+	} else if at, err := http.ParseTime(v); err == nil {
+		// Rounded up to whole seconds, which is how the wait is reported,
+		// so that it is never short.
+		wait = (at.Sub(now) + time.Second - 1).Truncate(time.Second)
+	}
+	return max(wait, 0)
 }
 
 // -- todos ------------------------------------------------------------------

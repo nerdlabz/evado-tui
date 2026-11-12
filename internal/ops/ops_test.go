@@ -562,6 +562,8 @@ func TestResolveRefusesAShortIDItCannotCheckAgainstEverything(t *testing.T) {
 		"a cursor that does not advance": feedServer(t, 200, map[string]any{"todos": one, "cursor": "5", "hasMore": true}),
 		"more pages and no cursor":       feedServer(t, 200, map[string]any{"todos": one, "hasMore": true}),
 		"a server with no feed":          feedServer(t, 400, map[string]any{"error": "bad_request", "code": "bad_request"}),
+		// The status still says what happened when the body has no code.
+		"a server with no feed and no code": feedServer(t, 400, map[string]any{"error": "Bad request"}),
 	}
 	for name, o := range cases {
 		_, err := o.Resolve(context.Background(), "abc")

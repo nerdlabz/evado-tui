@@ -469,6 +469,70 @@ func TestErrorMapping(t *testing.T) {
 	}
 }
 
+func TestErrorWithNoCodeKeepsTheStatusCode(t *testing.T) {
+	cases := []struct {
+		status int
+		body   string
+		want   string
+	}{
+		{http.StatusBadRequest, `{"error":"Bad request"}`, CodeBadRequest},
+		{http.StatusBadRequest, `{"error":"Bad request","code":""}`, CodeBadRequest},
+		{http.StatusNotFound, `{}`, CodeNotFound},
+		{http.StatusBadRequest, `{"error":"Bad request","code":"invalid_request"}`, CodeInvalidRequest},
+		// A body that is not JSON gets the code the service uses for the
+		// same status.
+		{http.StatusTooManyRequests, `slow down`, CodeRateLimited},
+		{http.StatusInternalServerError, `<html>oops</html>`, CodeInternal},
+		{http.StatusBadGateway, `<html>bad gateway</html>`, CodeUpstreamFailed},
+		{http.StatusServiceUnavailable, ``, CodeUpstreamFailed},
+		{http.StatusConflict, ``, CodeConflict},
+	}
+	for _, tc := range cases {
+		c, _ := newServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(tc.status)
+			_, _ = w.Write([]byte(tc.body))
+		}))
+		_, err := c.GetTodo(context.Background(), "abc")
+		if got := CodeOf(err); got != tc.want {
+			t.Errorf("%d %s: code = %q, want %q", tc.status, tc.body, got, tc.want)
+		}
+	}
+}
+
+func TestRetryAfter(t *testing.T) {
+	now := time.Date(2026, 3, 10, 15, 0, 0, 500_000_000, time.UTC)
+	cases := []struct {
+		header string
+		want   time.Duration
+	}{
+		{"", 0},
+		{"12", 12 * time.Second},
+		{" 12 ", 12 * time.Second},
+		{"0", 0},
+		{"-5", 0},
+		{"soon", 0},
+		// An HTTP date is a wait until then, rounded up to whole seconds.
+		{"Tue, 10 Mar 2026 15:01:30 GMT", 90 * time.Second},
+		{"Tue, 10 Mar 2026 14:59:00 GMT", 0},
+	}
+	for _, tc := range cases {
+		if got := retryAfter(tc.header, now); got != tc.want {
+			t.Errorf("retryAfter(%q) = %v, want %v", tc.header, got, tc.want)
+		}
+	}
+
+	c, _ := newServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "-30")
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"error":"Too many requests","code":"rate_limited"}`))
+	}))
+	_, err := c.ListTodos(context.Background(), TodoFilter{})
+	var apiErr *Error
+	if !errors.As(err, &apiErr) || apiErr.RetryAfter != 0 {
+		t.Errorf("a negative Retry-After should be no wait: %+v", apiErr)
+	}
+}
+
 func TestValidationErrorFields(t *testing.T) {
 	c, _ := newServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusBadRequest)
