@@ -586,6 +586,7 @@ func (m *Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// The clock keeps running while idle: sections and counts depend on
 		// today's date, and a toast only expires on a tick.
+		m.todos.regroup()
 		m.todos.computeStats()
 		return m, tea.Batch(tickCmd(), m.watchDisk())
 

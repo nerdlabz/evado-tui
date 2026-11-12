@@ -124,6 +124,10 @@ type todosView struct {
 	// the list was on screen. Turning the board on rebuilds it, so nothing
 	// reads it while it is stale.
 	boardStale bool
+	// regroupAt is when a todo on screen next moves to another section
+	// with no change to it: the next midnight, or the next due time to
+	// pass. The sections are laid out again then.
+	regroupAt time.Time
 
 	// anims are completions still being drawn, by todo id. A todo stays
 	// where it is until its animation ends, so the tick is seen to land.
@@ -182,6 +186,7 @@ func (v *todosView) merge(upserts []api.Todo, removes []string) {
 	v.all = out
 	v.snapshot = out
 	v.dropHay()
+	v.freshenDetail(upserts)
 	v.applyLive(keep)
 }
 
@@ -225,6 +230,22 @@ func (v *todosView) keepAfter(gone []string) string {
 		}
 	}
 	return ""
+}
+
+// freshenDetail takes a newer copy of the todo in the detail pane from
+// todos read for the list, so a change made on another device shows there
+// as it does in its row, without the pane being opened again. A copy older
+// than the pane's is left alone: a list read sent before an edit can
+// answer after the pane has the edited todo.
+func (v *todosView) freshenDetail(todos []api.Todo) {
+	if v.detail.ID == "" {
+		return
+	}
+	for _, t := range todos {
+		if t.ID == v.detail.ID && !t.UpdatedAt.Before(v.detail.UpdatedAt) {
+			v.detail = t
+		}
+	}
 }
 
 // mergeTodos returns base with the upserts replacing or joining it by id and
@@ -402,6 +423,7 @@ func (v *todosView) setItems(todos []api.Todo) {
 	if v.unfiltered() {
 		v.snapshot = todos
 	}
+	v.freshenDetail(todos)
 	v.applyLive(keep)
 }
 

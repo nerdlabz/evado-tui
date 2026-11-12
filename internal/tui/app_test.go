@@ -919,6 +919,42 @@ func TestOpeningDetailReadsTheChecklistOnce(t *testing.T) {
 	}
 }
 
+// A change made on another device shows in the open detail pane when the
+// list hears of it, through the change feed or a fresh read, without the
+// pane being opened again.
+func TestOpenDetailFollowsChangesMadeElsewhere(t *testing.T) {
+	f := sampleAPI()
+	h := newHarness(t, f)
+	h.press("g", "enter")
+	if h.model.focus != focusDetail || h.model.todos.detail.ID != "t1" {
+		t.Fatalf("focus = %v on %q, want t1 open", h.model.focus, h.model.todos.detail.ID)
+	}
+
+	changed := f.todos[0]
+	changed.Title = "Pay the cable bill online"
+	h.send(feedMsg{seq: h.model.todos.seq, cursor: "next", changes: []api.SyncTodo{{Todo: changed}}})
+	if got := h.model.todos.detail.Title; got != changed.Title {
+		t.Errorf("after the feed the pane shows %q, want %q", got, changed.Title)
+	}
+
+	f.todos[0].Title = "Pay the cable bill by card"
+	h.press("r")
+	if got := h.model.todos.detail.Title; got != f.todos[0].Title {
+		t.Errorf("after a refresh the pane shows %q, want %q", got, f.todos[0].Title)
+	}
+	h.mustContain("Pay the cable bill by card")
+
+	// A copy older than the one in the pane, from a read that was sent
+	// before the last change, leaves the pane as it is.
+	stale := h.model.todos.detail
+	stale.Title = "Pay the cable bill"
+	stale.UpdatedAt = h.model.todos.detail.UpdatedAt.Add(-time.Minute)
+	h.send(feedMsg{seq: h.model.todos.seq, cursor: "later", changes: []api.SyncTodo{{Todo: stale}}})
+	if got := h.model.todos.detail.Title; got != f.todos[0].Title {
+		t.Errorf("an older copy put back %q in the pane, want %q", got, f.todos[0].Title)
+	}
+}
+
 func TestCompleteAndReopen(t *testing.T) {
 	f := sampleAPI()
 	h := newHarness(t, f)

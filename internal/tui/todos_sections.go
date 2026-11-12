@@ -74,9 +74,15 @@ func (v *todosView) rebuild(keepID string) {
 // it on goes through rebuild, which lays it out then.
 func (v *todosView) arrange(keepID string) {
 	buckets := make(map[string][]int, len(sectionOrder))
+	now := v.m.now
+	y, mo, d := now.In(v.m.loc).Date()
+	v.regroupAt = time.Date(y, mo, d+1, 0, 0, 0, 0, v.m.loc)
 	for i, t := range v.items {
 		sec := v.sectionOf(t)
 		buckets[sec] = append(buckets[sec], i)
+		if t.DueAt != nil && !t.DueAt.Before(now) && t.DueAt.Before(v.regroupAt) {
+			v.regroupAt = *t.DueAt
+		}
 	}
 
 	v.lines = v.lines[:0]
@@ -132,6 +138,18 @@ func (v *todosView) arrange(keepID string) {
 	} else {
 		v.boardStale = true
 	}
+}
+
+// regroup lays the sections out again once the time has come for a todo
+// to move on its own, as one does at midnight or when it falls due. The
+// counts are worked out on every tick, and would otherwise disagree with
+// the list until something else rebuilt it.
+func (v *todosView) regroup() {
+	// A todo is overdue once its due time is past, not at it.
+	if v.regroupAt.IsZero() || !v.m.now.After(v.regroupAt) {
+		return
+	}
+	v.arrange(v.selectedID())
 }
 
 // sectionOf decides which bucket a todo belongs to, in the account timezone.
