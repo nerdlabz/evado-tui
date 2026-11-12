@@ -15,6 +15,10 @@ import (
 // helps.
 var ErrEnded = errors.New("the session ended; sign in again")
 
+// errUnusableRenewal is a refresh the server said yes to without a token
+// pair this session can use.
+var errUnusableRenewal = errors.New("could not renew the session: the server's answer had no usable token pair")
+
 const (
 	// early is how long before its expiry an access token is renewed, so
 	// a request is never sent with one that runs out on the way.
@@ -220,9 +224,15 @@ func (s *Session) rotate(ctx context.Context, saved bool) (string, error) {
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), callTimeout)
 	defer cancel()
 	p, err := s.api.RefreshTokens(ctx, old.RefreshToken)
+	if err == nil && (p.AccessToken == "" || p.RefreshToken == "" || (p.User.ID != "" && p.User.ID != old.UserID)) {
+		// A yes with no pair, or with one for another account, cannot be
+		// used. It is taken as an answer that never came, not as a renewal
+		// that worked with an empty token.
+		err = errUnusableRenewal
+	}
 
 	switch {
-	case err == nil && p.AccessToken != "" && p.RefreshToken != "" && (p.User.ID == "" || p.User.ID == old.UserID):
+	case err == nil:
 		next := s.credentials(p, old.UserID, old.Email)
 		if p.User.Email != "" {
 			next.Email = p.User.Email
@@ -253,14 +263,15 @@ func (s *Session) rotate(ctx context.Context, saved bool) (string, error) {
 		return "", s.end()
 	default:
 		// No answer the session can end on: offline, rate limited, a
-		// server error, or an answer lost after the token was sent. The
-		// token is kept and sent again next time, which is safe even if the
-		// server did spend it. Evado spends a token before it stores the
-		// new pair, so a 5xx or a lost answer can leave it spent with the
-		// new pair never seen here. Sent again, it gets a 401 for reuse,
-		// which revokes only this sign-in (no other device, no email) and
-		// ends the session, as giving up now would. If it was not spent, the
-		// retry renews it and nobody has to sign in again.
+		// server error, an answer lost after the token was sent, or one
+		// with no pair to use. The token is kept and sent again next time,
+		// which is safe even if the server did spend it. Evado spends a
+		// token before it stores the new pair, so a 5xx or a lost answer can
+		// leave it spent with the new pair never seen here. Sent again, it
+		// gets a 401 for reuse, which revokes only this sign-in (no other
+		// device, no email) and ends the session, as giving up now would. If
+		// it was not spent, the retry renews it and nobody has to sign in
+		// again.
 		return "", err
 	}
 }

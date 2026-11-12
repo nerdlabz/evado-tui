@@ -42,6 +42,8 @@ type issuer struct {
 	// token, and failLate spends it and then answers 500, as Evado does when
 	// storing the new pair fails.
 	failEarly, failLate atomic.Bool
+	// mangle, when set, changes every pair a refresh answers with.
+	mangle func(*api.TokenPair)
 	// failLogout answers revocation with a server error.
 	failLogout atomic.Bool
 	logouts    atomic.Int32
@@ -115,6 +117,9 @@ func (is *issuer) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		pair := is.issue(f)
+		if is.mangle != nil {
+			is.mangle(&pair)
+		}
 		is.mu.Unlock()
 		if is.drop.CompareAndSwap(true, false) {
 			// The token is spent, and the answer never arrives.
@@ -461,6 +466,48 @@ func TestARefreshWithNoSettledAnswerIsTriedAgain(t *testing.T) {
 			}
 			if n := is.refreshes.Load(); n != 2 {
 				t.Errorf("refreshes = %d, want the token sent twice, no more", n)
+			}
+		})
+	}
+}
+
+// A refresh answered 200 without a pair the session can use is an error,
+// never an empty token to send.
+func TestARefreshAnsweredWithNoUsablePairIsAnError(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		mangle func(*api.TokenPair)
+	}{
+		{"no access token", func(p *api.TokenPair) { p.AccessToken = "" }},
+		{"no refresh token", func(p *api.TokenPair) { p.RefreshToken = "" }},
+		{"another account", func(p *api.TokenPair) { p.User.ID = "u2" }},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			is, srv := newIssuer(t)
+			is.mangle = c.mangle
+			clk := &clock{t: time.Now()}
+			s, store := started(t, is, srv.URL, clk)
+			before, _ := onDisk(t, store)
+			clk.add(time.Hour)
+
+			// Not a request sent with an empty token and turned down as if
+			// signed out, but the renewal's own error.
+			res, err := s.Client().Get(srv.URL + "/me")
+			if err == nil {
+				drain(res)
+				t.Fatalf("status = %d, want the renewal's error", res.StatusCode)
+			}
+			if errors.Is(err, ErrEnded) {
+				t.Fatalf("error = %v, want one that keeps the session", err)
+			}
+			if after, ok := onDisk(t, store); !ok || after.RefreshToken != before.RefreshToken {
+				t.Fatal("an unusable answer replaced or dropped the saved pair")
+			}
+			// The server spent the token, so sending it again is how the
+			// session learns that it ended.
+			token, err := s.Token(context.Background())
+			if !errors.Is(err, ErrEnded) || token != "" {
+				t.Errorf("Token = %q, %v; want ErrEnded once the server says the token was reused", token, err)
 			}
 		})
 	}
