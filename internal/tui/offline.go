@@ -56,9 +56,12 @@ func (m *Model) signIn(merge bool) tea.Cmd {
 	}
 }
 
-// syncNow syncs with the account, if there is one.
+// syncNow syncs with the account, if there is one and no sync is waiting
+// or running already. The store runs one sync at a time and answers a
+// second at once with nothing done, and taking that answer in would end
+// the backoff while the sync still running may be about to fail.
 func (m *Model) syncNow() tea.Cmd {
-	if m.backend == nil || !m.backend.Status().SignedIn {
+	if m.backend == nil || m.syncQueued || !m.backend.Status().SignedIn {
 		return nil
 	}
 	m.syncQueued = true

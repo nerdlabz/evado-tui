@@ -207,7 +207,10 @@ func (m *Model) onPoll() tea.Cmd {
 		case m.layer == layerLogin || m.syncQueued:
 		case st.NeedsSignIn:
 			return tea.Batch(next, m.signIn(false))
-		case st.SignedIn:
+		case st.SignedIn && !time.Now().Before(m.syncRetry):
+			// After a failure the poll waits out the backoff, as the sync
+			// after a change does, so a server that is down is not asked
+			// again on every poll.
 			return tea.Batch(next, m.syncNow())
 		}
 		return next

@@ -27,11 +27,19 @@ type account struct {
 	clock time.Time
 	// down makes every request fail as if the network were gone.
 	down atomic.Bool
+	// requests counts every request that arrived, answered or not.
+	requests atomic.Int32
+	// hold, when set, keeps each request waiting until it is closed.
+	hold atomic.Pointer[chan struct{}]
 }
 
 func newAccount(t *testing.T) (*account, string) {
 	a := &account{todos: map[string]map[string]json.RawMessage{}, clock: time.Now().Add(time.Hour)}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		a.requests.Add(1)
+		if hold := a.hold.Load(); hold != nil {
+			<-*hold
+		}
 		if a.down.Load() {
 			if hj, ok := w.(http.Hijacker); ok {
 				if conn, _, err := hj.Hijack(); err == nil {
@@ -528,5 +536,65 @@ func TestAWarningAfterAKeyPressReplacesTheLastOne(t *testing.T) {
 	}
 	if got := h.model.toastText(); got != "" {
 		t.Errorf("toast = %q, want the first not to come back", got)
+	}
+}
+
+func TestThePollWaitsOutTheSyncBackoff(t *testing.T) {
+	acct, url := newAccount(t)
+	h := offlineHarness(t, config.Config{Token: "evt_good", BaseURL: url})
+	acct.down.Store(true)
+	h.run(h.model.syncNow())
+	if !time.Now().Before(h.model.syncRetry) {
+		t.Fatal("a failed sync set no backoff")
+	}
+
+	before := acct.requests.Load()
+	h.run(h.model.onPoll())
+	if n := acct.requests.Load() - before; n != 0 {
+		t.Errorf("the poll sent %d requests during the backoff, want none", n)
+	}
+
+	// Once the backoff is over the poll syncs again.
+	h.model.syncRetry = time.Now().Add(-time.Second)
+	h.run(h.model.onPoll())
+	if acct.requests.Load() == before {
+		t.Error("the poll did not sync once the backoff was over")
+	}
+}
+
+func TestRefreshingDuringASyncKeepsItsBackoff(t *testing.T) {
+	acct, url := newAccount(t)
+	h := offlineHarness(t, config.Config{Token: "evt_good", BaseURL: url})
+	acct.down.Store(true)
+	h.run(h.model.syncNow())
+	if h.model.syncBackoff != minBackoff {
+		t.Fatalf("backoff = %v after one failure, want %v", h.model.syncBackoff, minBackoff)
+	}
+
+	// The next sync is held on its way to the server, so it is still
+	// running when r is pressed.
+	hold := make(chan struct{})
+	acct.hold.Store(&hold)
+	sync := h.model.syncNow()
+	answer := make(chan tea.Msg)
+	go func() { answer <- sync() }()
+	for deadline := time.Now().Add(5 * time.Second); !h.model.backend.Status().Syncing; {
+		if time.Now().After(deadline) {
+			t.Fatal("the sync never started")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	h.press("r")
+	acct.hold.Store(nil)
+	close(hold)
+	h.send(<-answer)
+	h.run(h.cmds...)
+	h.cmds = nil
+
+	if h.model.syncBackoff != 2*minBackoff {
+		t.Errorf("backoff = %v after a second failure, want %v", h.model.syncBackoff, 2*minBackoff)
+	}
+	if h.model.syncQueued {
+		t.Error("a sync is still marked as on its way")
 	}
 }
