@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -12,28 +14,61 @@ import (
 	"github.com/nerdlabz/evado-tui/internal/api"
 )
 
-// Client is an HTTP client whose requests carry the session's access
-// token. It is the one place renewal happens: an api.Client or a proxy
-// built on it never sees a refresh token, and needs no token of its own.
+// Client is an HTTP client whose requests to the session's server carry
+// its access token. It is the one place renewal happens: an api.Client or
+// a proxy built on it never sees a refresh token, and needs no token of
+// its own.
 func (s *Session) Client() *http.Client {
+	var server string
+	if u, err := url.Parse(s.server); err == nil {
+		server = origin(u)
+	}
 	return &http.Client{
 		Timeout: 30 * time.Second,
 		// Like api.New's client: a redirect would drop the token, and the
 		// API client reports it instead.
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
-		Transport:     &transport{s: s, base: http.DefaultTransport},
+		Transport:     &transport{s: s, base: http.DefaultTransport, origin: server},
 	}
 }
 
 type transport struct {
 	s    *Session
 	base http.RoundTripper
+	// origin is the session server's scheme, host and port, the only place
+	// its token goes.
+	origin string
+}
+
+// origin is u's scheme, host and port, with the port the scheme implies
+// when none is given, or "" when u is not absolute.
+func origin(u *url.URL) string {
+	if u.Scheme == "" || u.Host == "" {
+		return ""
+	}
+	scheme, port := strings.ToLower(u.Scheme), u.Port()
+	if port == "" {
+		switch scheme {
+		case "http":
+			port = "80"
+		case "https":
+			port = "443"
+		}
+	}
+	return scheme + "://" + net.JoinHostPort(strings.ToLower(u.Hostname()), port)
 }
 
 // RoundTrip sends req with a current access token. A token the server
 // turns down early, because it was revoked or this computer's clock is
 // off, gets one renewal and the request is sent once more.
+//
+// A request for anywhere but the session's server, including one a
+// redirect led to, goes as it is: the token would let whoever is there act
+// as this account, and their 401 says nothing about the session.
 func (t *transport) RoundTrip(req *http.Request) (*http.Response, error) {
+	if o := origin(req.URL); o == "" || o != t.origin {
+		return t.base.RoundTrip(req)
+	}
 	token, err := t.s.Token(req.Context())
 	if err != nil {
 		closeBody(req)

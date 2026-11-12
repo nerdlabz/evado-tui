@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -384,6 +385,80 @@ func TestARejectedAccessTokenIsRenewedAndTheRequestSentAgain(t *testing.T) {
 	}
 	if len(is.bodies) != 1 || is.bodies[0] != `{"title":"milk"}` {
 		t.Errorf("bodies = %q, want the request sent again whole", is.bodies)
+	}
+}
+
+// The token goes to the session's server and nowhere else, not even where
+// that server redirects to.
+func TestTheTokenOnlyGoesToTheSessionsServer(t *testing.T) {
+	var mu sync.Mutex
+	var seen []string
+	other := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		seen = append(seen, r.Header.Get("Authorization"))
+		mu.Unlock()
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	t.Cleanup(other.Close)
+	is := &issuer{family: map[string]int{}, spent: map[string]bool{}, revoked: map[int]bool{}}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/moved" {
+			http.Redirect(w, r, other.URL+"/landed", http.StatusFound)
+			return
+		}
+		is.serve(w, r)
+	}))
+	t.Cleanup(srv.Close)
+	s, _ := started(t, is, srv.URL, &clock{t: time.Now()})
+
+	// Another port on the same host is another server.
+	res, err := s.Client().Get(other.URL + "/me")
+	if err != nil {
+		t.Fatal(err)
+	}
+	drain(res)
+	follows := s.Client()
+	follows.CheckRedirect = nil
+	if res, err = follows.Get(srv.URL + "/moved"); err != nil {
+		t.Fatal(err)
+	}
+	drain(res)
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(seen) != 2 || seen[0] != "" || seen[1] != "" {
+		t.Errorf("the other server saw Authorization %q, want two requests with none", seen)
+	}
+	if n := is.refreshes.Load(); n != 0 {
+		t.Errorf("refreshes = %d, want another server's 401 to leave the session alone", n)
+	}
+	// The session's own server still gets it.
+	if got := get(t, s, srv.URL); got != http.StatusOK {
+		t.Errorf("status = %d, want the token sent to the session's server", got)
+	}
+}
+
+func TestOriginComparesSchemeHostAndPort(t *testing.T) {
+	parse := func(raw string) string {
+		u, err := url.Parse(raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return origin(u)
+	}
+	server := parse("https://Evado.app/api/v1")
+	for raw, same := range map[string]bool{
+		"https://evado.app/api/v1/todos":     true,
+		"https://evado.app:443/api/v1/todos": true,
+		"http://evado.app/api/v1/todos":      false,
+		"https://evado.app:8443/api/v1":      false,
+		"https://api.evado.app/api/v1":       false,
+		"https://evado.app.example.com/":     false,
+		"/api/v1/todos":                      false,
+	} {
+		if got := parse(raw) == server; got != same {
+			t.Errorf("%s same origin as the server = %v, want %v", raw, got, same)
+		}
 	}
 }
 
