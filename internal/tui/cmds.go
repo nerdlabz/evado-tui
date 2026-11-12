@@ -166,7 +166,9 @@ type listsMsg struct {
 	lists []api.List
 	// joined is set when the response came from joining an invite.
 	joined *api.List
-	err    error
+	// left names the list the user just left.
+	left string
+	err  error
 }
 
 type membersMsg struct {
@@ -725,10 +727,17 @@ func fetchMembers(ctx context.Context, c *api.Client, listID string) tea.Cmd {
 	}
 }
 
-func removeMember(ctx context.Context, c *api.Client, listID, userID string) tea.Cmd {
+// removeMember takes someone off a list. Leaving a list oneself is
+// followed by reading the lists again rather than the members, as the list
+// is no longer one whose members can be read.
+func removeMember(ctx context.Context, c *api.Client, listID, userID string, self bool) tea.Cmd {
 	return func() tea.Msg {
 		if err := c.RemoveMember(ctx, listID, userID); err != nil {
 			return membersMsg{listID: listID, err: err}
+		}
+		if self {
+			ls, err := c.ListLists(ctx)
+			return listsMsg{lists: ls, left: listID, err: err}
 		}
 		ms, listErr := c.ListMembers(ctx, listID)
 		return membersMsg{listID: listID, members: ms, err: listErr}

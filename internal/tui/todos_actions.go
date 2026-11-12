@@ -172,7 +172,7 @@ func (v *todosView) openMove(m *Model) tea.Cmd {
 		return m.warnf("mark todos with v first, then press m to move them")
 	}
 	f := newForm(formMoveTodos, "Move "+plural(len(v.marks), "todo"), m.width)
-	f.selectValue("list", "to list", v.listOptions(m), "")
+	f.selectValue("list", "to list", v.listOptions(m, ""), "")
 	return m.openForm(f)
 }
 
@@ -238,11 +238,13 @@ func (m *Model) onBulk(msg bulkMsg, overtaken bool) tea.Cmd {
 
 // -- forms that change todos ------------------------------------------------
 
-func (v *todosView) listOptions(m *Model) []string {
+// listOptions are the lists a todo can be put in. A read-only list takes no
+// new todos, so it is left out, except as the list the todo being edited is
+// already in, which the form has to be able to show.
+func (v *todosView) listOptions(m *Model, current string) []string {
 	opts := make([]string, 0, len(m.lists))
 	for _, l := range m.lists {
-		if l.ReadOnly {
-			opts = append(opts, l.Name+" (read-only)")
+		if l.ReadOnly && l.ID != current {
 			continue
 		}
 		opts = append(opts, l.Name)
@@ -259,7 +261,7 @@ func (v *todosView) openCreate(m *Model) tea.Cmd {
 	f.preview(previewHint())
 	// A new todo goes to the list on screen, which is where it is expected
 	// to turn up.
-	f.selectValue("list", "list", v.listOptions(m), m.listName(v.filter.listID))
+	f.selectValue("list", "list", v.listOptions(m, ""), m.listName(v.filter.listID))
 	m.previewFor = ""
 	f.prose("notes", "notes", "", "optional", 3)
 	f.optionalField("remindAt", "remind", "", "leave empty, or a time like \"2pm tomorrow\"")
@@ -287,7 +289,7 @@ func (v *todosView) openEdit(m *Model) tea.Cmd {
 func (v *todosView) openEditFor(m *Model, t api.Todo) tea.Cmd {
 	f := newForm(formEditTodo, "Edit todo", m.width)
 	f.area("title", "title", t.Title, "", 3).titles()
-	f.selectValue("list", "list", v.listOptions(m), m.listName(t.ListID))
+	f.selectValue("list", "list", v.listOptions(m, t.ListID), m.listName(t.ListID))
 	f.prose("notes", "notes", deref(t.Notes), "", 4)
 	f.optionalField("scheduledDay", "do day", deref(t.ScheduledDay), "YYYY-MM-DD, or words like \"friday\"; empty clears")
 	f.optionalField("doAt", "do at", isoLocal(t.DoAt, m.loc), "YYYY-MM-DDTHH:MM, or words like \"5pm friday\"")
@@ -720,10 +722,9 @@ func (m *Model) renameStep(v map[string]string) tea.Cmd {
 	return tea.Batch(m.setBusy("renaming step"), renameChecklistItem(m.ctx, m.client, item, title))
 }
 
-// listIDByName maps a select option back to a list id, tolerating the
-// read-only suffix.
+// listIDByName maps a select option back to a list id.
 func (m *Model) listIDByName(name string) string {
-	name = strings.TrimSpace(strings.TrimSuffix(name, " (read-only)"))
+	name = strings.TrimSpace(name)
 	if name == "" || name == "(personal list)" {
 		return m.personalList()
 	}

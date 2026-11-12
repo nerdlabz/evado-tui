@@ -221,6 +221,20 @@ func (m *Model) onResult(msg tea.Msg) (*Model, tea.Cmd) {
 
 	case listsMsg:
 		m.done()
+		if msg.left != "" {
+			// The list is gone from here whether or not the lists could be
+			// read again, and so are its members.
+			delete(m.acct.memberCache, msg.left)
+			if m.listsV.membersFor == msg.left {
+				m.listsV.showMembers, m.listsV.members = false, nil
+				if m.focus == focusMembers {
+					m.focus = focusList
+				}
+			}
+		}
+		if msg.err != nil && msg.left != "" && api.CodeOf(msg.err) != api.CodeUnauthorized {
+			return m, m.warnf("left the list, but the lists could not be read again: %s", errText(msg.err))
+		}
 		if msg.err != nil {
 			return m, m.failf(msg.err, "lists")
 		}
@@ -228,6 +242,9 @@ func (m *Model) onResult(msg tea.Msg) (*Model, tea.Cmd) {
 			m.lists = msg.lists
 		}
 		m.listsV.setItems(m.lists)
+		if msg.left != "" {
+			return m, tea.Batch(m.todos.dropMissingList(m), m.okf("left the list"))
+		}
 		if msg.joined != nil {
 			return m, m.okf("joined %q", msg.joined.Name)
 		}

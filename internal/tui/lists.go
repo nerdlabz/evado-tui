@@ -187,7 +187,7 @@ func (v *listsView) onMemberKey(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.ask("remove-member", title,
 			fmt.Sprintf("%s will lose access to the list and its todos.", mem.Name()),
 			!mine,
-			func() tea.Cmd { return removeMember(m.ctx, m.client, listID, mem.UserID) })
+			func() tea.Cmd { return removeMember(m.ctx, m.client, listID, mem.UserID, mine) })
 	}
 	return m, nil
 }

@@ -1484,6 +1484,42 @@ func TestMemberPaneRemovesAMember(t *testing.T) {
 	}
 }
 
+// Leaving a list reads the lists again, not the members of the list just
+// left, which the service need no longer show. The pane that showed them
+// closes.
+func TestLeavingAListDoesNotReadItsMembersAgain(t *testing.T) {
+	f := sampleAPI()
+	f.members = []api.Member{
+		{UserID: "u1", Email: "demo@example.com", Role: "member"},
+		{UserID: "u2", Email: "sam@example.com", Role: "owner"},
+	}
+	h := newHarness(t, f)
+	h.press("2", "j", "m", "M") // Household → members → member pane
+	if h.model.focus != focusMembers {
+		t.Fatalf("focus = %v, want members", h.model.focus)
+	}
+	f.refuse = func(r *http.Request) bool {
+		return r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/members")
+	}
+	h.press("d") // the first member is the account itself
+	if h.model.conf == nil || h.model.conf.title != "Leave this list?" {
+		t.Fatalf("want the leave prompt, got %+v", h.model.conf)
+	}
+	h.press("y")
+	if got := h.model.toastText(); got != "left the list" {
+		t.Errorf("toast = %q, want word that the list was left", got)
+	}
+	if _, ok := h.model.listByID("l2"); ok {
+		t.Error("the list just left is still shown")
+	}
+	if h.model.focus != focusList || h.model.listsV.showMembers {
+		t.Errorf("focus = %v, members shown = %v; want the members pane closed", h.model.focus, h.model.listsV.showMembers)
+	}
+	if _, ok := h.model.acct.memberCache["l2"]; ok {
+		t.Error("the members of the list just left are still kept")
+	}
+}
+
 func TestAssignFormUsesCachedMembers(t *testing.T) {
 	f := sampleAPI()
 	h := newHarness(t, f)

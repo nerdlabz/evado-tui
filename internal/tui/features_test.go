@@ -2,6 +2,7 @@ package tui
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -807,5 +808,53 @@ func TestTheFeedCursorIsKeptExactlyAsTheServiceGaveIt(t *testing.T) {
 	h.model = next.(*Model)
 	if h.model.todos.cursor != "40412" {
 		t.Errorf("cursor = %q, want the one the feed returned", h.model.todos.cursor)
+	}
+}
+
+// listField is the options and value of a form's list picker.
+func listField(t *testing.T, h *harness) ([]string, string) {
+	t.Helper()
+	if h.model.form == nil {
+		t.Fatal("no form is open")
+	}
+	for _, fl := range h.model.form.fields {
+		if fl.key == "list" {
+			return fl.options, fl.value
+		}
+	}
+	t.Fatal("the form has no list field")
+	return nil, ""
+}
+
+// A read-only list takes no new todos, so no form offers to put one there,
+// where every request would be refused. A todo already in one still shows
+// its own list, and saving it does not move it.
+func TestReadOnlyListsAreNotOfferedAsDestinations(t *testing.T) {
+	f := sampleAPI()
+	past := time.Now().Add(-48 * time.Hour)
+	f.todos = append(f.todos, api.Todo{ID: "t4", ListID: "l3", Title: "File the report", UpdatedAt: past, CreatedAt: past})
+	h := newHarness(t, f)
+
+	h.press("n")
+	if opts, _ := listField(t, h); slices.Contains(opts, "Work") || len(opts) != 2 {
+		t.Errorf("new todo offers %q, want the two writable lists", opts)
+	}
+	h.press("esc", "g", "v", "m")
+	if opts, _ := listField(t, h); slices.Contains(opts, "Work") || len(opts) != 2 {
+		t.Errorf("move offers %q, want the two writable lists", opts)
+	}
+	h.press("esc", "esc")
+
+	h.model.todos.reveal("t4")
+	h.press("e")
+	opts, value := listField(t, h)
+	if value != "Work" || !slices.Contains(opts, "Work") {
+		t.Errorf("edit shows list %q of %q, want the todo's own list, Work", value, opts)
+	}
+	h.press("ctrl+s")
+	for _, p := range f.patches {
+		if _, moved := p.body["listId"]; moved {
+			t.Errorf("saving an untouched edit moved the todo: %v", p.body)
+		}
 	}
 }
