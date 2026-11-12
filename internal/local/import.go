@@ -190,9 +190,9 @@ func importTodoProblem(in api.SyncTodo) string {
 	switch {
 	case in.DeletedAt != nil:
 		return "exports must contain live todos"
-	case strings.TrimSpace(in.Title) == "" || textUnits(in.Title) > 500:
+	case strings.TrimSpace(in.Title) == "" || TextUnits(in.Title) > 500:
 		return "title must contain 1 to 500 characters"
-	case in.Notes != nil && textUnits(*in.Notes) > 10000:
+	case in.Notes != nil && TextUnits(*in.Notes) > 10000:
 		return "notes are at most 10000 characters"
 	case in.RecurrenceRule != nil && !ValidRule(*in.RecurrenceRule):
 		return "repeat rule is not supported"
@@ -207,7 +207,7 @@ func importTodoProblem(in api.SyncTodo) string {
 		}
 	}
 	for _, step := range in.Checklist {
-		if strings.TrimSpace(step.Title) == "" || textUnits(step.Title) > 500 {
+		if strings.TrimSpace(step.Title) == "" || TextUnits(step.Title) > 500 {
 			return "checklist titles must contain 1 to 500 characters"
 		}
 	}

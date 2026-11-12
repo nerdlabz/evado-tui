@@ -27,7 +27,7 @@ func captureLines(n api.NewTodo) []string {
 	}
 	var lines []string
 	for _, line := range strings.Split(n.Title, "\n") {
-		if line = strings.TrimSpace(line); storedTitle(line) != "" {
+		if line = strings.TrimSpace(line); StoredTitle(line) != "" {
 			lines = append(lines, line)
 		}
 	}

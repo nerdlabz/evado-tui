@@ -253,12 +253,12 @@ func load(path string, now time.Time) (State, error) {
 		t := &st.Todos[i]
 		base := t.based()
 		var fields []string
-		if title := storedTitle(t.Title); title != t.Title {
+		if title := StoredTitle(t.Title); title != t.Title {
 			t.Title = title
 			fields = append(fields, fTitle)
 		}
 		for j := range t.Steps {
-			if title := storedTitle(t.Steps[j].Title); title != t.Steps[j].Title {
+			if title := StoredTitle(t.Steps[j].Title); title != t.Steps[j].Title {
 				t.Steps[j].Title = title
 				fields = append(fields, fChecklist)
 			}

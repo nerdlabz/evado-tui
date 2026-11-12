@@ -9,6 +9,8 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/nerdlabz/evado-tui/internal/local"
 )
 
 // fieldKind selects the editor a form field uses.
@@ -52,6 +54,8 @@ type formField struct {
 	optional bool
 	// alert marks a note as a problem rather than guidance.
 	alert bool
+	// titles marks a field holding todo or step titles, one per line.
+	titles bool
 }
 
 // formResult is what a submitted form hands back to the app. orig holds
@@ -164,6 +168,42 @@ func (f *form) boxed(key, label, value, placeholder string, rows int, multiline 
 		area: ta, rows: rows, multiline: multiline,
 	})
 	return f
+}
+
+// titles marks the last field as holding titles, one per line, so no line
+// grows past what the service keeps of a title.
+func (f *form) titles() *form {
+	f.fields[len(f.fields)-1].titles = true
+	return f
+}
+
+// fitTitles cuts a line of a titles field that has grown past the longest
+// title the service keeps, by the rule it stores titles with. Otherwise a
+// pasted title would be shown, and its dates read, in full, and come back
+// from the next sync cut short.
+func (fl *formField) fitTitles() {
+	if !fl.titles {
+		return
+	}
+	value := fl.input.Value()
+	if fl.kind == fieldArea {
+		value = fl.area.Value()
+	}
+	lines := strings.Split(value, "\n")
+	cut := false
+	for i, line := range lines {
+		if local.TextUnits(line) > local.MaxTitle {
+			lines[i], cut = local.StoredTitle(line), true
+		}
+	}
+	if !cut {
+		return
+	}
+	if fl.kind == fieldArea {
+		fl.area.SetValue(strings.Join(lines, "\n"))
+		return
+	}
+	fl.input.SetValue(strings.Join(lines, "\n"))
 }
 
 // select appends a cycling field. The first option is the default.
@@ -362,21 +402,20 @@ func (f *form) update(msg tea.Msg) (*form, tea.Cmd) {
 		case tea.KeyCtrlK, tea.KeyShiftTab:
 			return f.move(-1), nil
 		case tea.KeyEnter:
-			if fl.multiline {
-				var cmd tea.Cmd
-				fl.area, cmd = fl.area.Update(msg)
-				return f, cmd
+			if !fl.multiline {
+				// Not a multi-line field: Enter is the save key, which
+				// onFormKey handles before this point.
+				return f, nil
 			}
-			// Not a multi-line field: Enter is the save key, which
-			// onFormKey handles before this point.
-			return f, nil
 		}
 		var cmd tea.Cmd
 		fl.area, cmd = fl.area.Update(msg)
+		fl.fitTitles()
 		return f, cmd
 	}
 	var cmd tea.Cmd
 	fl.input, cmd = fl.input.Update(msg)
+	fl.fitTitles()
 	return f, cmd
 }
 

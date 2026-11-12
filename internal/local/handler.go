@@ -745,11 +745,11 @@ func validID(id string) bool {
 
 func (b *Backend) createTodos(w http.ResponseWriter, r *http.Request) {
 	var n api.NewTodo
-	if err := json.NewDecoder(r.Body).Decode(&n); err != nil || strings.TrimSpace(n.Title) == "" || storedTitle(n.Title) == "" {
+	if err := json.NewDecoder(r.Body).Decode(&n); err != nil || strings.TrimSpace(n.Title) == "" || StoredTitle(n.Title) == "" {
 		fail(w, http.StatusBadRequest, "invalid_request", "a todo needs a title")
 		return
 	}
-	if n.Notes != nil && textUnits(*n.Notes) > 10000 {
+	if n.Notes != nil && TextUnits(*n.Notes) > 10000 {
 		fail(w, http.StatusBadRequest, "invalid_request", "notes are at most 10000 characters")
 		return
 	}
@@ -885,7 +885,7 @@ func (b *Backend) newTodo(n api.NewTodo, line, listID string, parsed Parsed) (To
 		}
 		t.CompletedAt = &at
 	}
-	t.Title = storedTitle(t.Title)
+	t.Title = StoredTitle(t.Title)
 	return t, nil
 }
 
@@ -941,11 +941,11 @@ func (b *Backend) todo(w http.ResponseWriter, r *http.Request, seg []string) {
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		b.change(w, func() (int, any) {
 			t := b.find(id)
-			title := storedTitle(body.Title)
+			title := StoredTitle(body.Title)
 			switch {
 			case t == nil:
 				return 0, notFound()
-			case textUnits(body.Title) > maxTitle:
+			case TextUnits(body.Title) > MaxTitle:
 				return 0, invalid("a step title is at most 500 characters")
 			case title == "":
 				return 0, invalid("a step needs a title")
@@ -1164,7 +1164,7 @@ func (b *Backend) patchTodo(id string, patch map[string]json.RawMessage) (int, a
 
 	if _, ok := patch["title"]; ok {
 		title, _ := str("title")
-		if title = storedTitle(title); title == "" {
+		if title = StoredTitle(title); title == "" {
 			return 0, invalid("a todo needs a title")
 		}
 		next.Title = title
@@ -1173,7 +1173,7 @@ func (b *Backend) patchTodo(id string, patch map[string]json.RawMessage) (int, a
 	if raw, ok := patch["notes"]; ok {
 		next.Notes = nil
 		if s, ok := str("notes"); ok && !isNull(raw) {
-			if textUnits(s) > 10000 {
+			if TextUnits(s) > 10000 {
 				return 0, invalid("notes are at most 10000 characters")
 			}
 			next.Notes = &s
@@ -1389,7 +1389,7 @@ func (b *Backend) step(w http.ResponseWriter, r *http.Request, id string) {
 						if frozen {
 							return 0, readOnly()
 						}
-						if json.Unmarshal(raw, &title) != nil || storedTitle(title) == "" || textUnits(title) > maxTitle {
+						if json.Unmarshal(raw, &title) != nil || StoredTitle(title) == "" || TextUnits(title) > MaxTitle {
 							return 0, invalid("a step needs a title")
 						}
 						titled = true
@@ -1406,7 +1406,7 @@ func (b *Backend) step(w http.ResponseWriter, r *http.Request, id string) {
 					}
 					t.Base = t.based()
 					if titled {
-						t.Steps[j].Title = storedTitle(title)
+						t.Steps[j].Title = StoredTitle(title)
 					}
 					if ticked {
 						t.Steps[j].CompletedAt = doneAt
@@ -1431,7 +1431,7 @@ func listName(raw string) (string, *problem) {
 	switch {
 	case name == "":
 		return "", &problem{http.StatusBadRequest, "invalid_request", "a list needs a name"}
-	case textUnits(name) > maxListName:
+	case TextUnits(name) > maxListName:
 		return "", &problem{http.StatusBadRequest, "invalid_request", "a list name is at most 120 characters"}
 	}
 	return name, nil

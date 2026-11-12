@@ -40,9 +40,9 @@ func TestATitleIsCutTheWayTheServiceStoresIt(t *testing.T) {
 		{"only spaces", " 　 ", ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			got := storedTitle(c.in)
+			got := StoredTitle(c.in)
 			if got != c.want {
-				t.Errorf("storedTitle = %d units %q, want %d units %q", units(got), got, units(c.want), c.want)
+				t.Errorf("StoredTitle = %d units %q, want %d units %q", units(got), got, units(c.want), c.want)
 			}
 			if !utf8.ValidString(got) || units(got) > 500 {
 				t.Errorf("result is not valid text of at most 500 units: %d units", units(got))
@@ -195,7 +195,7 @@ func TestALongTitleEditedHereSyncsOnceAndLeavesNothing(t *testing.T) {
 			if _, _, err := cl.UpdateTodo(ctx, todo.ID, api.TodoPatch{Title: api.Val(long)}); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := cl.AddChecklistItem(ctx, todo.ID, storedTitle("step "+long)); err != nil {
+			if _, err := cl.AddChecklistItem(ctx, todo.ID, StoredTitle("step "+long)); err != nil {
 				t.Fatal(err)
 			}
 

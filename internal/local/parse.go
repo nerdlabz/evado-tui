@@ -965,7 +965,7 @@ func firstWeekdayOccurrence(ruleText string, loc *time.Location, now time.Time, 
 
 // ValidRule reports whether s is a recurrence rule the service accepts.
 func ValidRule(s string) bool {
-	if textUnits(s) > 64 {
+	if TextUnits(s) > 64 {
 		return false
 	}
 	_, ok := parseRule(s)

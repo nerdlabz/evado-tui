@@ -255,7 +255,7 @@ func (v *todosView) listOptions(m *Model) []string {
 
 func (v *todosView) openCreate(m *Model) tea.Cmd {
 	f := newForm(formNewTodo, "New todo", m.width)
-	f.area("title", "title", "", "what needs doing? e.g. Pay the cable bill Friday at 5pm", 2)
+	f.area("title", "title", "", "what needs doing? e.g. Pay the cable bill Friday at 5pm", 2).titles()
 	f.preview(previewHint())
 	// A new todo goes to the list on screen, which is where it is expected
 	// to turn up.
@@ -269,7 +269,7 @@ func (v *todosView) openCreate(m *Model) tea.Cmd {
 func (v *todosView) openQuickCapture(m *Model) tea.Cmd {
 	f := newForm(formQuickAdd, "Quick capture", m.width)
 	f.note("hint", "One line per todo. The server parses dates in the text.")
-	f.prose("title", "todo", "", "one per line", 6)
+	f.prose("title", "todo", "", "one per line", 6).titles()
 	return m.openForm(f)
 }
 
@@ -286,7 +286,7 @@ func (v *todosView) openEdit(m *Model) tea.Cmd {
 
 func (v *todosView) openEditFor(m *Model, t api.Todo) tea.Cmd {
 	f := newForm(formEditTodo, "Edit todo", m.width)
-	f.area("title", "title", t.Title, "", 3)
+	f.area("title", "title", t.Title, "", 3).titles()
 	f.selectValue("list", "list", v.listOptions(m), m.listName(t.ListID))
 	f.prose("notes", "notes", deref(t.Notes), "", 4)
 	f.optionalField("scheduledDay", "do day", deref(t.ScheduledDay), "YYYY-MM-DD, or words like \"friday\"; empty clears")
@@ -327,13 +327,13 @@ func (v *todosView) openNewStep(m *Model) tea.Cmd {
 		return m.warnf("select a todo first")
 	}
 	f := newForm(formNewStep, "Add checklist step", m.width)
-	f.field("title", "step", "", "one step at a time")
+	f.field("title", "step", "", "one step at a time").titles()
 	return m.openForm(f)
 }
 
 func (v *todosView) openRenameStep(m *Model, item api.ChecklistItem) tea.Cmd {
 	f := newForm(formRenameStep, "Rename step", m.width)
-	f.field("title", "step", item.Title, "")
+	f.field("title", "step", item.Title, "").titles()
 	return m.openForm(f)
 }
 
