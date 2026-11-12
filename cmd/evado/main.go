@@ -52,8 +52,6 @@ func main() {
 		return
 	}
 
-	// A missing or broken config is not fatal: the TUI prompts for a token
-	// and writes a fresh one.
 	var cfg config.Config
 	cleanupDemo := func() {}
 	if *demo {
@@ -67,7 +65,18 @@ func main() {
 		}
 		defer cleanupDemo()
 	} else {
-		cfg, _ = config.Load()
+		// A missing config is a first run, and the TUI writes a fresh one.
+		// A config that is there but cannot be read stops everything: going
+		// on without it would hide the token and settings it holds, and the
+		// next save, -save included, would write over them.
+		var err error
+		if cfg, err = config.Load(); err != nil {
+			err = fmt.Errorf("%w; fix the file or move it aside, as evado will not write over a config it cannot read", err)
+			if isCommand(flag.Args()) {
+				exitWith(err, wantsJSON(flag.Args(), os.Getenv("EVADO_JSON")))
+			}
+			fatal(err)
+		}
 	}
 
 	// A flag beats the environment, and the environment beats the config

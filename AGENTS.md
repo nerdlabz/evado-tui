@@ -17,6 +17,10 @@ export EVADO_SERVER=https://your-host/api/v1   # only to test against another se
 ```
 
 A flag beats the environment, and the environment beats the saved config file.
+A config file that is there but cannot be read stops every command with exit 1
+and an error naming the file, even when the token comes from a flag or the
+environment, so a script never runs on settings other than the ones saved.
+`-save` will not write over it either: fix it or move it aside.
 
 With no token the CLI fails with exit code 3, unless it is asked to work on the
 todos kept on this computer instead (see [The todos on this
@@ -293,7 +297,7 @@ one this computer knows. An ISO date or time never needs it.
 | code | meaning |
 | --- | --- |
 | 0 | ok |
-| 1 | unexpected failure |
+| 1 | unexpected failure, or a config file that cannot be read |
 | 2 | usage: bad arguments, an ambiguous id, or a delete without `-yes` |
 | 3 | no token, or it was rejected |
 | 4 | no such todo or list |

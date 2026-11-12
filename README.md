@@ -255,7 +255,10 @@ Environment overrides:
 | `NO_COLOR` | plain text, no colour |
 
 The app stores the token in `config.json` with `0600` permissions and writes
-it through a temporary file, so an interrupted save cannot corrupt it.
+it through a temporary file, so an interrupted save cannot corrupt it. A
+`config.json` that cannot be read, after a hand edit gone wrong for example,
+is never written over: the app, `-save`, `-check` and every command stop
+with an error naming the file until it is fixed or moved aside.
 
 ## Keys
 
