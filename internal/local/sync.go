@@ -1146,6 +1146,9 @@ func (b *Backend) apply(ans syncAnswer, seen map[string]bool) (bool, []Replaceme
 	for _, l := range b.st.Deleted {
 		deleting[l.ID] = true
 	}
+	// An empty snapshot is taken as none, like an absent one. Every account
+	// has its personal list, so an empty one can only be a broken answer,
+	// and applying it would drop every list here and the todos in them.
 	if len(ans.Lists) > 0 {
 		lists := make([]List, 0, len(ans.Lists))
 		known := map[string]bool{}

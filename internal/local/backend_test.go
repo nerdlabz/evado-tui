@@ -59,6 +59,9 @@ type service struct {
 	// turned down, and noSnapshot leaves the snapshot out of /sync.
 	invites, declined []api.Invitation
 	noSnapshot        bool
+	// noLists makes /sync answer an empty list snapshot, as a broken
+	// service would.
+	noLists bool
 	// inviteReads counts GET /invitations.
 	inviteReads int
 	// claims counts the claims and releases that were granted.
@@ -291,6 +294,9 @@ func (s *service) serve(w http.ResponseWriter, r *http.Request) {
 		sort.Slice(out, func(i, j int) bool { return out[i].UpdatedAt.Before(out[j].UpdatedAt) })
 		lists := []wireList{}
 		for _, l := range s.lists {
+			if s.noLists {
+				break
+			}
 			members := s.members
 			if members == nil {
 				members = []api.Member{{UserID: "u1", Username: s.user.Username, Email: "me@example.com", Role: "owner"}}
@@ -687,6 +693,33 @@ func TestWorksWithNoAccount(t *testing.T) {
 	}
 	if got := titles(t, again.Client()); strings.Join(got, ",") != "one,three,two" {
 		t.Errorf("after reopening: %v", got)
+	}
+}
+
+// With no account the todos here have no change log: a todo deleted
+// before it was ever synced leaves no tombstone, so a feed read from the
+// file would miss it. Reading changes since a cursor is refused the way the
+// full read refuses one, and the full read itself still answers.
+func TestTheChangeFeedNeedsAnAccount(t *testing.T) {
+	ctx := context.Background()
+	c := open(t, "", "").Client()
+	gone := add(t, c, "Gone before any sync")
+	add(t, c, "Kept")
+	if err := c.DeleteTodo(ctx, gone.ID); err != nil {
+		t.Fatal(err)
+	}
+	_, feedErr := c.ChangeFeed(ctx, "0")
+	_, syncErr := c.Sync(ctx, api.SyncRequest{Since: "0"})
+	for name, err := range map[string]error{"feed": feedErr, "sync": syncErr} {
+		var apiErr *api.Error
+		if !errors.As(err, &apiErr) || apiErr.StatusCode != http.StatusForbidden || apiErr.Code != api.CodeForbidden ||
+			!strings.Contains(apiErr.Message, "needs an Evado account") {
+			t.Errorf("%s since a cursor with no account = %v, want 403 forbidden", name, err)
+		}
+	}
+	full, err := c.Sync(ctx, api.SyncRequest{})
+	if err != nil || len(full.Todos) != 1 || full.Todos[0].Title != "Kept" {
+		t.Errorf("full read = %+v, %v, want the one live todo", full.Todos, err)
 	}
 }
 

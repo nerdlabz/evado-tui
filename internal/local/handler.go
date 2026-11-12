@@ -534,23 +534,11 @@ func (b *Backend) listTodos(w http.ResponseWriter, r *http.Request, path string)
 			b.proxy(w, r, path)
 			return
 		}
-		// With no account the cursor is this file's own: the milliseconds
-		// of the last read, in the shape the service uses for its cursors.
-		ms, _ := strconv.ParseInt(q.Get("since"), 10, 64)
-		since := time.UnixMilli(ms)
-		b.locked(w, func() (int, any) {
-			type row struct {
-				api.Todo
-				Checklist []api.ChecklistItem `json:"checklist"`
-			}
-			out := []row{}
-			for _, t := range b.st.Todos {
-				if t.DeletedAt == nil && t.UpdatedAt.After(since) {
-					out = append(out, row{t.Todo, t.Steps})
-				}
-			}
-			return http.StatusOK, map[string]any{"todos": out, "lists": b.lists(), "cursor": strconv.FormatInt(b.now().UnixMilli(), 10), "hasMore": false}
-		})
+		// With no account there is no change log: deleting a todo the
+		// service never had leaves nothing behind, so a feed read from
+		// this file could not say what went, and a reader keeping a copy
+		// would keep it forever. Refused as the full read refuses it.
+		fail(w, http.StatusForbidden, "forbidden", "the todos on this computer have no change log to read; that needs an Evado account")
 		return
 	}
 

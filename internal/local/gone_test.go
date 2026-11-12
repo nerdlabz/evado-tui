@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/nerdlabz/evado-tui/internal/api"
@@ -269,5 +270,44 @@ func TestAMovedTodoSurvivesTheFirstPullsPruning(t *testing.T) {
 	}
 	if up := svc.todos[made.ID]; up == nil || up.ListID != "p1" {
 		t.Errorf("the service has %+v", up)
+	}
+}
+
+// Every account has its personal list, so a snapshot with no lists at all
+// is a broken answer, not every list leaving at once. It is ignored, on an
+// incremental pull and on a full one, and nothing here goes.
+func TestAnEmptyListSnapshotLeavesTheListsAndTodosHere(t *testing.T) {
+	ctx := context.Background()
+	svc, url := newService(t)
+	svc.lists = append(svc.lists, api.List{ID: "work", Name: "Work", Role: "owner"})
+	b := syncedAt(t, filepath.Join(t.TempDir(), "todos.json"), url)
+	c := b.Client()
+	add(t, c, "Buy milk")
+	if _, err := c.CreateTodos(ctx, api.NewTodo{Title: "Write the report", ListID: "work"}); err != nil {
+		t.Fatal(err)
+	}
+	mustSync(t, b)
+
+	svc.noLists = true
+	for _, full := range []bool{false, true} {
+		if full {
+			b.mu.Lock()
+			b.st.Cursor = ""
+			err := b.persist()
+			b.mu.Unlock()
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		res := mustSync(t, b)
+		if len(res.ListsGone) != 0 {
+			t.Errorf("full %v: gone = %+v, want nothing", full, res.ListsGone)
+		}
+		if got := strings.Join(listNames(t, c), ","); got != "Personal,Work" {
+			t.Errorf("full %v: lists = %s, want both kept", full, got)
+		}
+		if got := strings.Join(titles(t, c), ","); got != "Buy milk,Write the report" {
+			t.Errorf("full %v: todos = %s, want both kept", full, got)
+		}
 	}
 }
