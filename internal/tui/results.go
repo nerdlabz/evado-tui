@@ -277,11 +277,10 @@ func (m *Model) onResult(msg tea.Msg) (*Model, tea.Cmd) {
 		}
 		m.acct.imported = &msg.result
 		if msg.preview {
-			m.declined = func() tea.Cmd { return m.restoreImportForm(msg.path) }
-			return m, m.ask("import", "Import these todos?", importSummary(msg.result)+" Apply this file?", false, func() tea.Cmd {
+			return m, m.askOr("import", "Import these todos?", importSummary(msg.result)+" Apply this file?", false, func() tea.Cmd {
 				m.busy = true
 				return tea.Batch(m.setBusy("importing"), importFile(m, msg.path, msg.data, false))
-			})
+			}, func() tea.Cmd { return m.restoreImportForm(msg.path) })
 		}
 		if !msg.result.Complete {
 			return m, tea.Batch(m.refreshAll(true), m.autoSync(), m.restoreImportForm(msg.path), m.warnf("Import incomplete: %d remaining. Rerun this file explicitly to continue.", msg.result.Remaining))

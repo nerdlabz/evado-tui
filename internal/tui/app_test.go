@@ -976,6 +976,26 @@ func TestEscapeClosesConfirmation(t *testing.T) {
 	}
 }
 
+// A question that replaces one left unanswered brings its own answers:
+// turning down the new one must not run what saying no to the old one
+// would have done.
+func TestReplacedQuestionDoesNotKeepItsNo(t *testing.T) {
+	h := newHarness(t, sampleAPI())
+	ranNo := false
+	h.model.askOr("first", "First?", "", false, nil, func() tea.Cmd {
+		ranNo = true
+		return nil
+	})
+	h.model.ask("second", "Second?", "", false, nil)
+	h.press("esc")
+	if ranNo {
+		t.Error("turning down the second question ran the first one's no")
+	}
+	if h.model.layer != layerNone {
+		t.Errorf("layer = %v, want the dialog closed", h.model.layer)
+	}
+}
+
 func TestDangerousConfirmationNeedsTwoEnters(t *testing.T) {
 	f := sampleAPI()
 	h := newHarness(t, f)
@@ -1829,6 +1849,26 @@ func TestRejectedTokenReturnsToLogin(t *testing.T) {
 	h.send(meMsg{err: &api.Error{StatusCode: http.StatusUnauthorized, Code: api.CodeUnauthorized}})
 	if got := h.model.login.tokenInput.Value(); got != "evt" {
 		t.Errorf("token input = %q, want %q", got, "evt")
+	}
+}
+
+// A rejected token that cannot be taken out of the config file would be
+// tried again on the next start, so the sign-in screen says it is still
+// there.
+func TestRejectedTokenThatStaysSavedIsReported(t *testing.T) {
+	h := newHarness(t, sampleAPI())
+	// A file where the config's directory should be makes every save fail.
+	blocker := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(blocker, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("EVADO_CONFIG", filepath.Join(blocker, "config.json"))
+	h.send(todosMsg{err: &api.Error{StatusCode: http.StatusUnauthorized, Code: api.CodeUnauthorized}})
+	if h.model.layer != layerLogin {
+		t.Fatalf("layer = %v, want login", h.model.layer)
+	}
+	if !strings.Contains(h.model.login.err, "rejected token is still in it") {
+		t.Errorf("login error = %q, want word that the token is still saved", h.model.login.err)
 	}
 }
 

@@ -123,12 +123,11 @@ func (m *Model) onSignedIn(msg signedInMsg) tea.Cmd {
 		return dropped
 	case msg.merge.Needed:
 		m.signingIn = fromLogin
-		m.declined = m.declineMerge
-		return m.ask("merge", "Add this computer's todos to your account?",
+		return m.askOr("merge", "Add this computer's todos to your account?",
 			fmt.Sprintf("This computer has %s and the account has %s. Yes adds the ones here to the account, "+
 				"and nothing is deleted on either side. No leaves this computer as it is, not signed in.",
 				plural(msg.merge.Local, "todo"), plural(msg.merge.Server, "todo")),
-			false, func() tea.Cmd { return m.signIn(true) })
+			false, func() tea.Cmd { return m.signIn(true) }, m.declineMerge)
 	}
 	// Whatever the inbox held was the last account's, and so is who is
 	// on record until the account is read again.

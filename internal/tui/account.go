@@ -621,15 +621,22 @@ func (v *accountView) profileView(m *Model, width int) string {
 	if h := api.Handle(m.user.Username); h != "" {
 		username = h
 	}
-	rows := section("profile", []kv{
+	profile := []kv{
 		{"id", m.user.ID},
 		{"email", m.user.Email},
 		{"username", username},
 		{"timezone", m.user.TZ},
-		{"joined", formatStamp(&m.user.CreatedAt, m.loc)},
-		{"lists", fmt.Sprintf("%d", len(m.lists))},
-		{"todos", fmt.Sprintf("%d loaded in the todos view", len(m.todos.items))},
-	}, width)
+	}
+	// Until the account has been read there is no date to show, and the
+	// zero time would read as a join in the year 1.
+	if !m.user.CreatedAt.IsZero() {
+		profile = append(profile, kv{"joined", formatStamp(&m.user.CreatedAt, m.loc)})
+	}
+	profile = append(profile,
+		kv{"lists", fmt.Sprintf("%d", len(m.lists))},
+		kv{"todos", fmt.Sprintf("%d loaded in the todos view", len(m.todos.items))},
+	)
+	rows := section("profile", profile, width)
 	return rows + "\n" + paneNote("Other people see your username in member lists and when a todo is assigned to you; "+
 		"without one they see your email with part of it hidden. "+usernameRules, width) +
 		"\n\n" + styFaint.Render("enter sets your username · x removes it")

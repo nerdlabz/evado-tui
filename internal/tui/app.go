@@ -396,8 +396,9 @@ func (m *Model) reauthenticate() {
 		email = m.session.Email()
 	}
 	m.forgetSession()
+	stale := m.cfg.Token != ""
 	m.cfg.Token = ""
-	_ = m.cfg.Save()
+	saveErr := m.cfg.Save()
 	m.outdateMe(m.meSeq)
 	m.done()
 	m.form, m.conf, m.pending, m.declined = nil, nil, nil, nil
@@ -413,6 +414,11 @@ func (m *Model) reauthenticate() {
 	if email != "" {
 		m.login.fill(email)
 		m.login.err = "Your session has ended. Sign in again."
+	}
+	if stale && saveErr != nil {
+		// Otherwise the next start signs in with the same token, and is
+		// turned down again, with no word of why it came back.
+		m.login.err += " The config file could not be saved, so the rejected token is still in it: " + errText(saveErr)
 	}
 	m.layer = layerLogin
 }
@@ -971,11 +977,18 @@ func (m *Model) submitForm() (tea.Model, tea.Cmd) {
 // -- confirmations ----------------------------------------------------------
 
 func (m *Model) ask(id, title, body string, danger bool, onYes func() tea.Cmd) tea.Cmd {
+	return m.askOr(id, title, body, danger, onYes, nil)
+}
+
+// askOr is ask for a question where saying no is acted on too. Both
+// answers are set together, as a question can replace one that was never
+// answered, and the new one must not carry the old one's no.
+func (m *Model) askOr(id, title, body string, danger bool, onYes, onNo func() tea.Cmd) tea.Cmd {
 	m.conf = newConfirm(id, title, body, danger)
 	// "yes" is preselected so enter works, but a destructive prompt needs
 	// two presses, which is what stops a stray enter from deleting data.
 	m.conf.yes = true
-	m.pending = onYes
+	m.pending, m.declined = onYes, onNo
 	m.layer = layerConfirm
 	return nil
 }
