@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -240,5 +242,51 @@ func TestLoadMoreOnThisComputerFollowsTheStoresCursor(t *testing.T) {
 	h.press("L", "L")
 	if len(v.all) != 450 || v.moreToLoad() {
 		t.Errorf("after L twice: %d loaded, more = %v, want all 450", len(v.all), v.moreToLoad())
+	}
+}
+
+// An account with more todos than one read of it takes in is refused rather
+// than shown in part, and the refusal says so in words, with what still
+// works, instead of an empty list that reads as every todo being done.
+func TestAccountTooBigToReadSaysSo(t *testing.T) {
+	if got := groupDigits(accountLimit); got != "10,000" {
+		t.Fatalf("limit written as %q, want 10,000", got)
+	}
+	big := testapi.New()
+	big.FeedPageSize = 1 // so the page bound is reached without 10,000 todos
+	big.Todos = nil
+	for i := range maxFeedPages + 1 {
+		big.Todos = append(big.Todos, api.Todo{ID: fmt.Sprintf("b%03d", i), ListID: "l1", Title: "Big"})
+	}
+	c := big.Client(t)
+
+	h := newHarness(t, &fakeAPI{lists: sampleAPI().lists})
+	h.mustContain("Every todo is done")
+	msg, ok := fetchAccount(context.Background(), c, h.model.todos.seq)().(todosMsg)
+	if !ok || !errors.Is(msg.err, errAccountTooBig) || len(msg.todos) != 0 {
+		t.Fatalf("read = %d todos, err %v, want none and the account refused as too big", len(msg.todos), msg.err)
+	}
+	h.send(msg)
+	h.run(h.cmds...)
+	h.cmds = nil
+	h.mustContain("more than 10,000 todos, the most this version reads at once; F shows one list")
+	h.mustContain("This account has more than 10,000 todos,")
+	h.mustContain("evado ls -cursor")
+	h.mustNotContain("Every todo is done")
+	h.mustNotContain("load todos")
+
+	// One list is read a page at a time, so it still loads.
+	h.press("F", "right", "enter")
+	if h.model.todos.filter.listID != "l1" {
+		t.Fatalf("filter = %+v, want the list l1", h.model.todos.filter)
+	}
+	h.mustContain("Nothing matches these filters")
+	h.mustNotContain("This account has more than")
+
+	// One page fewer is read whole.
+	big.Todos = big.Todos[:maxFeedPages]
+	msg = fetchAccount(context.Background(), c, 0)().(todosMsg)
+	if msg.err != nil || len(msg.todos) != maxFeedPages {
+		t.Fatalf("read = %d todos, err %v, want all %d", len(msg.todos), msg.err, maxFeedPages)
 	}
 }

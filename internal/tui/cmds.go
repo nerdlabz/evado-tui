@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strconv"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -424,17 +425,37 @@ func fetchAccount(ctx context.Context, c *api.Client, seq int) tea.Cmd {
 				return out
 			}
 			if resp.Cursor == "" || resp.Cursor == cursor {
-				break
+				out.err = errors.New("the account could not be read to the end")
+				return out
 			}
 			cursor = resp.Cursor
 		}
-		out.err = errors.New("the account could not be read to the end")
+		out.err = errAccountTooBig
 		return out
 	}
 }
 
 // maxFeedPages bounds how long one catch-up can run.
 const maxFeedPages = 50
+
+// accountLimit is the most todos a read of the whole account takes in. A
+// page of the feed holds up to api.MaxPageSize of them.
+const accountLimit = maxFeedPages * api.MaxPageSize
+
+// errAccountTooBig is a read of the whole account that reached the page
+// bound with more still to come. What was read is not shown: the counts and
+// sections would be worked out from part of the account and look complete.
+var errAccountTooBig = fmt.Errorf("more than %s todos, the most this version reads at once", groupDigits(accountLimit))
+
+// groupDigits writes a count with a comma between each group of three
+// digits, the way a person writes a large number.
+func groupDigits(n int) string {
+	s := strconv.Itoa(n)
+	for i := len(s) - 3; i > 0; i -= 3 {
+		s = s[:i] + "," + s[i:]
+	}
+	return s
+}
 
 // pullFeed asks the server only for what changed since a point in time,
 // following hasMore until it has everything. It is what keeps a refresh

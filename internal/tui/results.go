@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"errors"
+
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/nerdlabz/evado-tui/internal/api"
@@ -67,6 +69,13 @@ func (m *Model) onResult(msg tea.Msg) (*Model, tea.Cmd) {
 			return m, nil
 		}
 		m.done()
+		if msg.unfiltered {
+			m.todos.tooBig = errors.Is(msg.err, errAccountTooBig)
+		}
+		if errors.Is(msg.err, errAccountTooBig) {
+			// The narrowed views read a page at a time, so they still work.
+			return m, toastCmd(toastError, "%s; F shows one list, / searches", msg.err)
+		}
 		if msg.err != nil {
 			return m, m.failf(msg.err, "load todos")
 		}

@@ -108,6 +108,9 @@ type todosView struct {
 	// merged into them instead of reloading. It holds for the todos kept on
 	// this computer too, which have no cursor.
 	whole bool
+	// tooBig says the last read of the whole account was refused for
+	// having more todos than it takes in, so an empty list is not empty.
+	tooBig bool
 
 	// st summarises the whole account for the header and the sidebar.
 	st todoStats

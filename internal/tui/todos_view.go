@@ -477,6 +477,15 @@ func (v *todosView) emptyState(w, h int) string {
 			styMuted.Render("Nothing matches these filters."),
 			styFaint.Render("the title above lists them; S opens a saved view"),
 		}
+	case v.tooBig:
+		// Not empty: too big to read, which the default would hide by
+		// saying every todo is done.
+		lines = []string{
+			styMuted.Render(fmt.Sprintf("This account has more than %s todos,", groupDigits(accountLimit))),
+			styMuted.Render("the most this version reads at once."),
+			styFaint.Render("F shows one list and / searches"),
+			styFaint.Render("evado ls -cursor reads them all in a shell"),
+		}
 	default:
 		// Everything is empty: genuinely nothing left.
 		if h >= catchyRows+6 && w >= 40 {
