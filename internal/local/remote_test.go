@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -82,5 +83,37 @@ func TestAPassedOnRequestCanBeSentAgainByASession(t *testing.T) {
 	want := []string{`Bearer old {"code":"abc"}`, `Bearer new {"code":"abc"}`}
 	if len(joins) != 2 || joins[0] != want[0] || joins[1] != want[1] {
 		t.Errorf("the service saw %q, want the request sent again whole with the new token", joins)
+	}
+}
+
+// An answer longer than the client would read is refused here too, rather
+// than read whole before it is passed on.
+func TestAPassedOnAnswerLongerThanTheLimitIsRefused(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		write := func(v any) { _ = json.NewEncoder(w).Encode(v) }
+		switch r.URL.Path {
+		case "/me":
+			write(map[string]any{"user": api.User{ID: "u1", TZ: "UTC"}, "lists": []api.List{}})
+		case "/sync":
+			write(map[string]any{"todos": []api.Todo{}, "lists": []api.List{}, "hasMore": false})
+		case "/me/export":
+			chunk := []byte(strings.Repeat(" ", 1<<16))
+			for sent := 0; sent <= api.MaxResponseBytes; sent += len(chunk) {
+				if _, err := w.Write(chunk); err != nil {
+					return
+				}
+			}
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	ctx := context.Background()
+	b := open(t, "", "")
+	if _, err := b.SignIn(ctx, "evt_x", srv.URL, false); err != nil {
+		t.Fatal(err)
+	}
+	_, err := b.Client().Export(ctx)
+	if api.CodeOf(err) != api.CodeUpstreamFailed || !strings.Contains(err.Error(), api.ErrResponseTooLarge.Error()) {
+		t.Fatalf("Export error = %v, want %s saying the answer was too long", err, api.CodeUpstreamFailed)
 	}
 }

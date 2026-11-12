@@ -268,7 +268,7 @@ func (c *Client) do(ctx context.Context, method, path string, body, out any) (in
 	c.lastID = res.Header.Get("X-Request-Id")
 	c.mu.Unlock()
 
-	raw, err := io.ReadAll(res.Body)
+	raw, err := ReadResponse(res.Body)
 	if err != nil {
 		return res.StatusCode, fmt.Errorf("read response: %w", err)
 	}
@@ -284,6 +284,30 @@ func (c *Client) do(ctx context.Context, method, path string, body, out any) (in
 		}
 	}
 	return res.StatusCode, nil
+}
+
+// MaxResponseBytes is the most read of one answer from a server. The
+// largest real ones are an account export and a sync page of 200 todos
+// with their notes and checklists, which stay well under it; four times
+// what an import file may be leaves room for an export that grew past
+// that. A server sending more is refused rather than read until memory
+// runs out.
+const MaxResponseBytes = 4 * MaxImportBytes
+
+// ErrResponseTooLarge is a server answer longer than MaxResponseBytes.
+var ErrResponseTooLarge = fmt.Errorf("the server sent more than %d MiB", MaxResponseBytes>>20)
+
+// ReadResponse reads a response body, refusing one longer than
+// MaxResponseBytes.
+func ReadResponse(body io.Reader) ([]byte, error) {
+	raw, err := io.ReadAll(io.LimitReader(body, MaxResponseBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) > MaxResponseBytes {
+		return nil, ErrResponseTooLarge
+	}
+	return raw, nil
 }
 
 // Call makes a request the typed methods do not cover, such as a /sync

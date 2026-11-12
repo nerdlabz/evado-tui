@@ -198,7 +198,12 @@ func (b *Backend) forward(w http.ResponseWriter, r *http.Request, path string) b
 		return false
 	}
 	defer func() { _ = res.Body.Close() }()
-	raw, _ := io.ReadAll(res.Body)
+	raw, err := api.ReadResponse(res.Body)
+	if err != nil {
+		// Passing on part of an answer could read as a whole one.
+		fail(w, http.StatusBadGateway, api.CodeUpstreamFailed, "read response: "+err.Error())
+		return true
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(res.StatusCode)
 	_, _ = w.Write(raw)

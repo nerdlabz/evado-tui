@@ -780,3 +780,36 @@ func TestSyncResponseTellsAnEmptyInvitationSnapshotFromNone(t *testing.T) {
 		t.Fatalf("missing snapshot decoded as %#v, want nil", absent.Invitations)
 	}
 }
+
+// oversized answers every request with a body just past MaxResponseBytes.
+// A hostile server need never stop; a finite one keeps a regression from
+// filling memory.
+func oversized(status int) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(status)
+		chunk := []byte(strings.Repeat(" ", 1<<16))
+		for sent := 0; sent <= MaxResponseBytes; sent += len(chunk) {
+			if _, err := w.Write(chunk); err != nil {
+				return
+			}
+		}
+	}
+}
+
+func TestResponseLongerThanTheLimitIsRefused(t *testing.T) {
+	for _, status := range []int{http.StatusOK, http.StatusInternalServerError} {
+		c, _ := newServer(t, oversized(status))
+		_, err := c.ExportTodos(context.Background())
+		if !errors.Is(err, ErrResponseTooLarge) {
+			t.Errorf("status %d: error = %v, want ErrResponseTooLarge", status, err)
+		}
+	}
+}
+
+func TestReadResponseKeepsABodyAtTheLimit(t *testing.T) {
+	raw, err := ReadResponse(strings.NewReader(strings.Repeat("x", MaxResponseBytes)))
+	if err != nil || len(raw) != MaxResponseBytes {
+		t.Fatalf("read %d bytes, %v; want all %d", len(raw), err, MaxResponseBytes)
+	}
+}
