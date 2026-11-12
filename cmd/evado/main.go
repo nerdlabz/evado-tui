@@ -187,28 +187,9 @@ func localMode(flagSet, flagVal bool, env string, cfg config.Config) bool {
 // it went; see the ops package for what each code means.
 func runCLI(cfg config.Config, args []string, onLocal bool) {
 	jsonOut := wantsJSON(args, os.Getenv("EVADO_JSON"))
-	var c *api.Client
-	switch {
-	case onLocal:
-		path, err := local.Path()
-		var b *local.Backend
-		if err == nil {
-			// No account is given to it, so nothing here reaches the
-			// network. Changes to todos tied to an account wait in the file
-			// for the TUI to send them, as changes made offline do.
-			b, err = local.Open(path, "", "")
-		}
-		if err != nil {
-			exitWith(err, jsonOut)
-		}
-		c = b.Client()
-	case cfg.Token == "":
-		exitWith(&api.Error{
-			StatusCode: 401, Code: api.CodeUnauthorized,
-			Message: "no token: pass -token, set EVADO_TOKEN, or save one with evado -save -token evt_…",
-		}, jsonOut)
-	default:
-		c = api.New(cfg.Token, api.WithBaseURL(cfg.BaseURL))
+	c, err := commandClient(cfg, args, onLocal)
+	if err != nil {
+		exitWith(err, jsonOut)
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -220,14 +201,41 @@ func runCLI(cfg config.Config, args []string, onLocal bool) {
 	if fi, err := os.Stdin.Stat(); err == nil && fi.Mode()&os.ModeCharDevice == 0 {
 		in = os.Stdin
 	}
-	if onLocal {
-		if err := serverOnly(args); err != nil {
-			exitWith(err, jsonOut)
-		}
-	}
 	if err := runCommand(ctx, o, args, os.Stdout, in, jsonOut); err != nil {
 		exitWith(err, jsonOut)
 	}
+}
+
+// commandClient is the client a command talks to: the todos on this
+// computer, or the server with the token.
+func commandClient(cfg config.Config, args []string, onLocal bool) (*api.Client, error) {
+	if !onLocal {
+		if cfg.Token == "" {
+			return nil, &api.Error{
+				StatusCode: 401, Code: api.CodeUnauthorized,
+				Message: "no token: pass -token, set EVADO_TOKEN, or save one with evado -save -token evt_…",
+			}
+		}
+		return api.New(cfg.Token, api.WithBaseURL(cfg.BaseURL)), nil
+	}
+	// Opening the todos here reads the file and waits for its lock, so a
+	// command only the service can answer is refused first: a file that is
+	// busy or damaged would otherwise hide that it can never work here.
+	if err := serverOnly(args); err != nil {
+		return nil, err
+	}
+	path, err := local.Path()
+	if err != nil {
+		return nil, err
+	}
+	// No account is given to it, so nothing here reaches the network.
+	// Changes to todos tied to an account wait in the file for the TUI to
+	// send them, as changes made offline do.
+	b, err := local.Open(path, "", "")
+	if err != nil {
+		return nil, err
+	}
+	return b.Client(), nil
 }
 
 // exitWith reports an error, as JSON on standard error when asked, and

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -59,6 +61,30 @@ func TestServerOnlyCommandsAreRefusedOnThisComputer(t *testing.T) {
 		if !slices.Contains(serverOnlyCmds, cmd) && serverOnly([]string{cmd}) != nil {
 			t.Errorf("%s is refused on this computer, but works there", cmd)
 		}
+	}
+}
+
+// A command only the service can answer is refused before the todos here
+// are opened, so a damaged or busy file cannot hide why it will never work.
+func TestServerOnlyCommandsAreRefusedBeforeTheFileIsRead(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("EVADO_CONFIG", filepath.Join(dir, "config.json"))
+	todos := filepath.Join(dir, "todos.json")
+	if err := os.WriteFile(todos, []byte("{not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, cmd := range []string{"changes", "claim", "release"} {
+		_, err := commandClient(config.Config{}, []string{cmd, "3fa9"}, true)
+		if info := describe(err); info.ExitCode != ops.ExitUsage || info.Code != "needs_server" {
+			t.Errorf("%s: %+v, want exit 2 and needs_server", cmd, info)
+		}
+	}
+	if _, err := os.Stat(todos + ".lock"); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("the lock file was taken: %v", err)
+	}
+	// The same file stops a command that does work here.
+	if _, err := commandClient(config.Config{}, []string{"ls"}, true); err == nil || !strings.Contains(err.Error(), "damaged") {
+		t.Errorf("ls on a damaged file: %v, want it reported", err)
 	}
 }
 
