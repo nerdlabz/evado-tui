@@ -908,6 +908,17 @@ func TestEnteringDetailShowsNotesAndChecklist(t *testing.T) {
 	h.mustContain("call the provider")
 }
 
+func TestOpeningDetailReadsTheChecklistOnce(t *testing.T) {
+	f := sampleAPI()
+	h := newHarness(t, f)
+	f.stepReads = nil
+	h.press("enter")
+	h.mustContain("read the meter")
+	if len(f.stepReads) != 1 || f.stepReads[0] != "t1" {
+		t.Errorf("steps read = %v, want one read of t1", f.stepReads)
+	}
+}
+
 func TestCompleteAndReopen(t *testing.T) {
 	f := sampleAPI()
 	h := newHarness(t, f)

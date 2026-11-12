@@ -21,7 +21,9 @@ type paneReq struct {
 	gen int
 }
 
-// openDetail shows a todo in the detail pane and asks for it and its steps.
+// openDetail shows a todo in the detail pane and asks for it. Its steps are
+// asked for when the todo arrives, as they are after any change to it, so
+// asking for them here as well would read them twice.
 // A different todo from the last one starts from a clean pane, with only
 // what the list already knows about it, so nothing of the last todo can be
 // shown or acted on under the new one's name while the answers are coming.
@@ -37,7 +39,7 @@ func (v *todosView) openDetail(m *Model, id string) tea.Cmd {
 		v.setSteps(nil)
 	}
 	m.focus = focusDetail
-	return tea.Batch(fetchTodo(m.ctx, m.client, v.pane), fetchChecklist(m.ctx, m.client, v.pane))
+	return fetchTodo(m.ctx, m.client, v.pane)
 }
 
 // paneWants reports whether an answer is for the pane as it is now. The
