@@ -426,6 +426,11 @@ func (c *cli) list(ctx context.Context, args []string) error {
 	if len(pos) > 0 {
 		return usageOf(listSynopsis)
 	}
+	// 0 is the default; a negative limit is a mistake, and would otherwise
+	// quietly mean 200 like the default does.
+	if *limit < 0 {
+		return &usageErr{fmt.Sprintf("-limit must be 0 or more, not %d\nusage: evado %s", *limit, listSynopsis)}
+	}
 	found, err := c.o.ListTodos(ctx, ops.ListInput{
 		Status: *status, List: *list, Query: *query, Assigned: *assigned, Limit: *limit, Cursor: *cursor,
 	})

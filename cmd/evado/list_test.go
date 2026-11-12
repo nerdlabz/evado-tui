@@ -160,3 +160,17 @@ func TestListPagesOnThisComputerToo(t *testing.T) {
 		t.Errorf("after the first 100: %v %q, want the other 140", err, out)
 	}
 }
+
+// A negative limit is refused like any other bad number, rather than read
+// as the default.
+func TestListRefusesANegativeLimit(t *testing.T) {
+	f := testapi.New()
+	onlyTodos(f, 3)
+	_, err := run(t, f, "", "ls", "-limit", "-5")
+	if describe(err).ExitCode != ops.ExitUsage || !strings.Contains(err.Error(), "-limit must be 0 or more") {
+		t.Fatalf("ls -limit -5: %v, want a usage error", err)
+	}
+	if out, err := run(t, f, "", "ls", "-limit", "0"); err != nil || strings.Count(out, "\n") != 3 {
+		t.Errorf("ls -limit 0: %q %v, want the default", out, err)
+	}
+}
