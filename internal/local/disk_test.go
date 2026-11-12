@@ -192,6 +192,73 @@ func TestAHeldFileTimesOut(t *testing.T) {
 	}
 }
 
+// Signing out removes the file only while this copy holds it and has read
+// it. Removing it otherwise could undo another copy's save, or a newer
+// version's file this one cannot read. Nor does a later save, once the file
+// is free again, finish the removal behind the person's back.
+func TestForgetLeavesAFileItCannotHoldOrRead(t *testing.T) {
+	wait := diskWait
+	diskWait = 50 * time.Millisecond
+	t.Cleanup(func() { diskWait = wait })
+	newer := []byte(`{"version": 99, "lists": [{"id": "x"}], "todos": []}`)
+	for _, tc := range []struct {
+		name string
+		// block stops the backend from using the file and returns what
+		// frees it again, or nil when nothing does.
+		block func(t *testing.T, path string) func()
+	}{
+		{"held by another copy", func(t *testing.T, path string) func() {
+			f, err := lockFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return func() { _ = f.Close() }
+		}},
+		{"unreadable", func(t *testing.T, path string) func() {
+			if err := os.WriteFile(path, newer, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			return nil
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "todos.json")
+			b, err := Open(path, "", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := b.Client().CreateTodos(context.Background(), api.NewTodo{Title: "Keep me"}); err != nil {
+				t.Fatal(err)
+			}
+			free := tc.block(t, path)
+			before, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := b.Forget(); err == nil {
+				t.Error("Forget reported success without holding and reading the file")
+			}
+			after, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatalf("the file was removed: %v", err)
+			}
+			if string(after) != string(before) {
+				t.Errorf("the file changed: %s", after)
+			}
+			if free == nil {
+				return
+			}
+			free()
+			if _, err := b.Client().CreateTodos(context.Background(), api.NewTodo{Title: "Later"}); err != nil {
+				t.Fatal(err)
+			}
+			if ts := titles(t, b.Client()); !slices.Contains(ts, "Keep me") {
+				t.Errorf("after the next save: %v, want the todo kept", ts)
+			}
+		})
+	}
+}
+
 // A command writing while the TUI has offline list changes queued keeps
 // them, and the TUI's next change and sync keep the command's todo.
 func TestQueuedListChangesSurviveACommandWritingInBetween(t *testing.T) {

@@ -241,13 +241,20 @@ func (b *Backend) loc() *time.Location {
 }
 
 // Forget removes everything kept on this computer and the link to the
-// account, which is what signing out means.
+// account, which is what signing out means. Like persist it leaves the file
+// alone when it could not be locked or read: removing it then could undo
+// another copy of evado's save, or race one still being made, and a file
+// it cannot read may be a newer version's. The state is kept too, so it
+// still matches the file and no later save removes the todos by accident.
 func (b *Backend) Forget() error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	b.connect(Remote{})
-	b.st = fresh(b.now())
 	b.lastErr = nil
+	if b.diskErr != nil {
+		return b.diskErr
+	}
+	b.st = fresh(b.now())
 	return b.written(func() error {
 		if err := os.Remove(b.path); err != nil && !errors.Is(err, os.ErrNotExist) {
 			return err
