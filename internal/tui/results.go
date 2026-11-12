@@ -138,6 +138,9 @@ func (m *Model) onResult(msg tea.Msg) (*Model, tea.Cmd) {
 		}
 		return m, m.todos.onMembers(msg)
 
+	case assigneesMsg:
+		return m, m.todos.onAssignees(msg)
+
 	case settledMsg:
 		m.done()
 		return m, msg.toast

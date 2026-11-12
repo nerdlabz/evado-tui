@@ -337,11 +337,62 @@ func (v *todosView) openRenameStep(m *Model, item api.ChecklistItem) tea.Cmd {
 	return m.openForm(f)
 }
 
+// openAssign asks who should have the todo. Until the list's members have
+// been read the picker could offer nobody but Anyone, so they are read
+// first when nothing has filled the cache yet.
 func (v *todosView) openAssign(m *Model) tea.Cmd {
 	t := v.currentTodo(m)
 	if t == nil {
 		return nil
 	}
+	if _, ok := m.acct.memberCache[t.ListID]; ok {
+		return v.showAssign(m, *t, "")
+	}
+	v.openSeq++
+	m.busy = true
+	return tea.Batch(m.setBusy(""), fetchAssignees(m.ctx, m.client, *t, v.openSeq))
+}
+
+// assigneesMsg is the members of a todo's list, read to fill its assignee
+// picker.
+type assigneesMsg struct {
+	seq     int
+	todoID  string
+	listID  string
+	members []api.Member
+	err     error
+}
+
+func fetchAssignees(ctx context.Context, c *api.Client, t api.Todo, seq int) tea.Cmd {
+	return func() tea.Msg {
+		ms, err := c.ListMembers(ctx, t.ListID)
+		return assigneesMsg{seq: seq, todoID: t.ID, listID: t.ListID, members: ms, err: err}
+	}
+}
+
+// onAssignees opens the assignee picker once the members are in, unless
+// something else was opened or picked while they were read.
+func (v *todosView) onAssignees(msg assigneesMsg) tea.Cmd {
+	m := v.m
+	if msg.seq != v.openSeq {
+		return nil
+	}
+	m.done()
+	t := v.currentTodo(m)
+	if t == nil || t.ID != msg.todoID || m.layer != layerNone {
+		return nil
+	}
+	if msg.err != nil {
+		// Left out of the cache, so the next try reads them again.
+		return v.showAssign(m, *t, "Only Anyone is offered, because the members of this list could not be read: "+errText(msg.err))
+	}
+	m.acct.memberCache[msg.listID] = msg.members
+	return v.showAssign(m, *t, "")
+}
+
+// showAssign opens the assignee picker with the members cached for the
+// todo's list. warning, when set, replaces the usual hint.
+func (v *todosView) showAssign(m *Model, t api.Todo, warning string) tea.Cmd {
 	l, _ := m.listByID(t.ListID)
 	opts := []string{"Anyone"}
 	for _, mem := range m.acct.membersFor(t.ListID) {
@@ -352,7 +403,10 @@ func (v *todosView) openAssign(m *Model) tea.Cmd {
 		opts = append(opts, label)
 	}
 	f := newForm(formAssignTodo, "Assign in "+l.Name, m.width)
-	f.note("hint", "The assignee must already be a member of the list.")
+	if warning == "" {
+		warning = "The assignee must already be a member of the list."
+	}
+	f.note("hint", warning)
 	f.selectValue("assignee", "assign to", opts, "")
 	return m.openForm(f)
 }

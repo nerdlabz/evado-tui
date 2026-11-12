@@ -28,6 +28,20 @@ func formAlert(h *harness) string {
 	return ""
 }
 
+// formHint is the guidance note of the open form.
+func formHint(h *harness) string {
+	h.t.Helper()
+	if h.model.form == nil {
+		h.t.Fatal("no form is open")
+	}
+	for _, fl := range h.model.form.fields {
+		if fl.kind == fieldNote && fl.label == "hint" {
+			return fl.value
+		}
+	}
+	return ""
+}
+
 // openInvite goes to Household, which the account owns, and opens the
 // invite form.
 func openInvite(t *testing.T, f *fakeAPI) *harness {
@@ -323,6 +337,51 @@ func TestAssigningBySelectedUsername(t *testing.T) {
 	if len(f.patches) != 1 || string(f.patches[0].body["assigneeId"]) != `"u2"` {
 		t.Fatalf("patches = %+v, want the todo assigned to u2", f.patches)
 	}
+}
+
+func TestAssignPickerReadsMembersNothingHasLoaded(t *testing.T) {
+	f := sampleAPI()
+	f.members = []api.Member{
+		{UserID: "u1", Username: strp("demo"), Email: "demo@example.com", Role: "owner"},
+		{UserID: "u2", Username: strp("sam"), Email: "s***@example.com", Role: "member"},
+	}
+	h := newHarness(t, f)
+	// Straight into the unassigned Household todo, with no other screen
+	// having read who is in the list.
+	h.press("j", "enter", "A")
+	if h.model.layer != layerForm || h.model.form.id != formAssignTodo {
+		t.Fatalf("layer = %v, want the assignee picker", h.model.layer)
+	}
+	h.press("tab", "right", "right")
+	h.mustContain("@sam")
+	h.press("enter")
+	if len(f.patches) != 1 || string(f.patches[0].body["assigneeId"]) != `"u2"` {
+		t.Fatalf("patches = %+v, want the todo assigned to u2", f.patches)
+	}
+}
+
+func TestAssignPickerSaysWhenMembersCannotBeRead(t *testing.T) {
+	f := sampleAPI()
+	f.members = []api.Member{
+		{UserID: "u1", Username: strp("demo"), Email: "demo@example.com", Role: "owner"},
+		{UserID: "u2", Username: strp("sam"), Email: "s***@example.com", Role: "member"},
+	}
+	f.refuse = func(r *http.Request) bool { return strings.HasSuffix(r.URL.Path, "/members") }
+	h := newHarness(t, f)
+	h.press("j", "enter", "A")
+	if got := formHint(h); !strings.Contains(got, "could not be read") {
+		t.Errorf("hint = %q, want it to say the members could not be read", got)
+	}
+	h.mustNotContain("@sam")
+
+	// Once the server answers again, the next try reads them.
+	f.refuse = nil
+	h.press("esc", "A")
+	if got := formHint(h); strings.Contains(got, "could not be read") {
+		t.Errorf("hint = %q after the members were read", got)
+	}
+	h.press("tab", "right", "right")
+	h.mustContain("@sam")
 }
 
 func TestUsernameShowsAndCanBeSet(t *testing.T) {
