@@ -177,16 +177,12 @@ func (m *Model) onMutation(msg mutationMsg) tea.Cmd {
 	// this one must not paint over it. It still takes its place in the
 	// history, or says that it failed.
 	if !ok {
-		// Create and delete report failure as a failed load.
-		if l, isLoad := msg.msg.(todosMsg); isLoad && l.err != nil {
-			return tea.Batch(next, m.failf(l.err, "todo"))
-		}
 		return next
 	}
 	r.order = msg.order
 	m.settleUndo(r)
 	if r.err != nil {
-		return tea.Batch(next, m.failf(r.err, "todo"))
+		return tea.Batch(next, m.failf(r.err, r.action.failed()))
 	}
 	m.recordUndo(r)
 	return next

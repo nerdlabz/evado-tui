@@ -427,14 +427,14 @@ func createTodoWithRemindWords(ctx context.Context, c *api.Client, loc *time.Loc
 	return func() tea.Msg {
 		pv, err := c.Parse(ctx, text)
 		if err != nil {
-			return todosMsg{err: err}
+			return todoMsg{err: err, action: actionCreated}
 		}
 		if problem := dates.ParseProblem(dates.Remind, text, pv); problem != nil {
-			return todosMsg{err: problem}
+			return todoMsg{err: problem, action: actionCreated}
 		}
 		val, _, ok := dates.FromParse(dates.Remind, pv, loc)
 		if !ok {
-			return todosMsg{err: dates.Unreadable(dates.Remind, text)}
+			return todoMsg{err: dates.Unreadable(dates.Remind, text), action: actionCreated}
 		}
 		n.RemindAt = &val
 		return createTodo(ctx, c, n)()

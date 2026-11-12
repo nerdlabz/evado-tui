@@ -964,6 +964,26 @@ func TestDeleteTodoAsksFirst(t *testing.T) {
 	}
 }
 
+// A refused create or delete says which it was, not that loading failed.
+func TestFailedCreateAndDeleteSayWhatFailed(t *testing.T) {
+	f := sampleAPI()
+	h := newHarness(t, f)
+	f.refuse = refusing(http.MethodPost, "/todos")
+	h.press("n")
+	h.typeText("Call the bank")
+	h.press("enter")
+	if got := h.model.toastText(); !strings.HasPrefix(got, "add todo: ") {
+		t.Errorf("toast = %q, want it to say adding the todo failed", got)
+	}
+
+	f.refuse = refusing(http.MethodDelete, "/todos/t1")
+	h.press("esc", "g", "d", "y")
+	if got := h.model.toastText(); !strings.HasPrefix(got, "delete todo: ") {
+		t.Errorf("toast = %q, want it to say deleting the todo failed", got)
+	}
+	h.mustContain("Pay the cable bill")
+}
+
 func TestEscapeClosesConfirmation(t *testing.T) {
 	f := sampleAPI()
 	h := newHarness(t, f)

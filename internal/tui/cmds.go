@@ -133,6 +133,17 @@ const (
 	actionDeleted
 )
 
+// failed names the action in the error shown when it fails.
+func (a todoAction) failed() string {
+	switch a {
+	case actionCreated:
+		return "add todo"
+	case actionDeleted:
+		return "delete todo"
+	}
+	return "todo"
+}
+
 // detailMsg and checklistsMsg carry the pane request they answer, so an
 // answer for a todo that is no longer open is dropped.
 type detailMsg struct {
@@ -528,7 +539,7 @@ func createTodo(ctx context.Context, c *api.Client, n api.NewTodo) tea.Cmd {
 			ts, err = createInBatches(ctx, c, n)
 		}
 		if err != nil {
-			return todosMsg{err: err}
+			return todoMsg{err: err, action: actionCreated}
 		}
 		if len(ts) == 0 {
 			return todoMsg{action: actionCreated}
@@ -595,29 +606,22 @@ func uncompleteTodo(ctx context.Context, c *api.Client, id string) tea.Cmd {
 func deleteTodo(ctx context.Context, c *api.Client, t api.Todo) tea.Cmd {
 	return func() tea.Msg {
 		if err := c.DeleteTodo(ctx, t.ID); err != nil {
-			return todosMsg{err: err}
+			return todoMsg{err: err, action: actionDeleted}
 		}
 		return todoMsg{action: actionDeleted, title: t.Title, deleted: &t}
 	}
 }
 
 // asUndo marks the todoMsg a command produces as the outcome of taking
-// back undo entry seq. A create reports failure as a failed load, which
-// would lose which entry it was for, so that becomes a failed todoMsg too.
+// back undo entry seq.
 func asUndo(seq int, cmd tea.Cmd) tea.Cmd {
 	return func() tea.Msg {
-		switch r := cmd().(type) {
-		case todoMsg:
-			r.undo = seq
-			return r
-		case todosMsg:
-			if r.err != nil {
-				return todoMsg{err: r.err, action: actionCreated, undo: seq}
-			}
-			return r
-		default:
-			return r
+		r := cmd()
+		if t, ok := r.(todoMsg); ok {
+			t.undo = seq
+			return t
 		}
+		return r
 	}
 }
 

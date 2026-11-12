@@ -155,7 +155,7 @@ func (m *Model) onResult(msg tea.Msg) (*Model, tea.Cmd) {
 		if msg.err != nil {
 			// The list may be showing the outcome ahead of the server, so
 			// reload to put it back the way it really is.
-			return m, tea.Batch(m.failf(msg.err, "todo"), m.todos.load())
+			return m, tea.Batch(m.failf(msg.err, msg.action.failed()), m.todos.load())
 		}
 		m.recordUndo(msg)
 		if msg.action == actionDeleted {
