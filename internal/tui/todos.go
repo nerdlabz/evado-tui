@@ -248,6 +248,42 @@ func (v *todosView) freshenDetail(todos []api.Todo) {
 	}
 }
 
+// closeDeleted closes the detail pane when the list learns that the todo
+// open in it is gone, deleted on another device or by a command, so the
+// pane does not go on offering changes to a todo that is no longer there.
+// The todo comes off the list first, which puts the cursor on the one that
+// took its place, as a delete made here does. A delete made here closes the
+// pane itself once it is answered, and until then the todo has a change on
+// its way, so it is left to that.
+func (m *Model) closeDeleted(gone func(id string) bool) tea.Cmd {
+	v := &m.todos
+	id := v.pane.id
+	if !m.inDetail() || id == "" || len(m.muts.lines[id]) > 0 || !gone(id) {
+		return nil
+	}
+	v.drop(id)
+	v.detail = api.Todo{}
+	v.setSteps(nil)
+	m.focus = focusList
+	return m.warnf("that todo was deleted elsewhere")
+}
+
+// deletedIn reports whether the change feed deleted a todo. The list drops
+// a todo the feed names as deleted anywhere in it, and so does this.
+func deletedIn(changes []api.SyncTodo) func(id string) bool {
+	return func(id string) bool {
+		return slices.ContainsFunc(changes, func(c api.SyncTodo) bool { return c.ID == id && c.Tombstoned() })
+	}
+}
+
+// missingFrom reports whether a read of the whole account has no todo by
+// an id, which means it has been deleted since it was last read.
+func missingFrom(todos []api.Todo) func(id string) bool {
+	return func(id string) bool {
+		return !slices.ContainsFunc(todos, func(t api.Todo) bool { return t.ID == id })
+	}
+}
+
 // mergeTodos returns base with the upserts replacing or joining it by id and
 // the removals dropped.
 func mergeTodos(base, upserts []api.Todo, removes []string) []api.Todo {

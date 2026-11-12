@@ -55,11 +55,16 @@ func (m *Model) onResult(msg tea.Msg) (*Model, tea.Cmd) {
 
 	case todosMsg:
 		if msg.snap {
-			if msg.seq == m.todos.snapSeq {
-				m.todos.onSnapshot(msg)
-				m.todos.keepSteps(msg.steps)
+			if msg.seq != m.todos.snapSeq {
+				return m, nil
 			}
-			return m, nil
+			var closed tea.Cmd
+			if msg.err == nil {
+				closed = m.closeDeleted(missingFrom(msg.todos))
+			}
+			m.todos.onSnapshot(msg)
+			m.todos.keepSteps(msg.steps)
+			return m, closed
 		}
 		// A reply to a load that has since been replaced is stale: the
 		// newer one is still on its way and will clear the busy state.
@@ -83,6 +88,10 @@ func (m *Model) onResult(msg tea.Msg) (*Model, tea.Cmd) {
 			m.todos.addPage(msg.todos, msg.next)
 			return m, m.todos.settleReveal(m)
 		}
+		var closed tea.Cmd
+		if msg.unfiltered {
+			closed = m.closeDeleted(missingFrom(msg.todos))
+		}
 		m.todos.setItems(msg.todos)
 		m.todos.next, m.todos.loadedFor = msg.next, msg.of
 		m.todos.whole = msg.unfiltered
@@ -91,15 +100,20 @@ func (m *Model) onResult(msg tea.Msg) (*Model, tea.Cmd) {
 			m.todos.cursor = msg.cursor
 			m.todos.snapCursor = msg.cursor
 		}
-		return m, m.todos.settleReveal(m)
+		return m, tea.Batch(closed, m.todos.settleReveal(m))
 
 	case feedMsg:
 		if msg.snap {
-			if msg.seq == m.todos.snapSeq {
-				m.todos.onSnapshotFeed(msg)
-				m.todos.keepFeedSteps(msg.changes)
+			if msg.seq != m.todos.snapSeq {
+				return m, nil
 			}
-			return m, nil
+			var closed tea.Cmd
+			if msg.err == nil {
+				closed = m.closeDeleted(deletedIn(msg.changes))
+			}
+			m.todos.onSnapshotFeed(msg)
+			m.todos.keepFeedSteps(msg.changes)
+			return m, closed
 		}
 		if msg.seq != m.todos.seq {
 			return m, nil
@@ -117,17 +131,18 @@ func (m *Model) onResult(msg tea.Msg) (*Model, tea.Cmd) {
 		if m.layer != layerSearch {
 			m.todos.live = ""
 		}
+		closed := m.closeDeleted(deletedIn(msg.changes))
 		m.todos.applyFeed(msg.changes)
 		m.todos.keepFeedSteps(msg.changes)
 		if msg.cursor == "" {
 			// Without a cursor the feed cannot continue, so the next
 			// refresh reads the account again.
 			m.todos.cursor = ""
-			return m, m.todos.settleReveal(m)
+			return m, tea.Batch(closed, m.todos.settleReveal(m))
 		}
 		m.todos.cursor = msg.cursor
 		m.todos.snapCursor = msg.cursor
-		return m, m.todos.settleReveal(m)
+		return m, tea.Batch(closed, m.todos.settleReveal(m))
 
 	case mutationMsg:
 		return m, m.onMutation(msg)

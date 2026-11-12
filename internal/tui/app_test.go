@@ -955,6 +955,121 @@ func TestOpenDetailFollowsChangesMadeElsewhere(t *testing.T) {
 	}
 }
 
+// paneClosedOnDelete checks that the open todo's pane was closed because it
+// was deleted somewhere else, with the list back in focus without it.
+func paneClosedOnDelete(t *testing.T, h *harness, id string) {
+	t.Helper()
+	if h.model.focus != focusList || h.model.todos.detail.ID != "" {
+		t.Errorf("focus = %v on %q, want the list with the pane closed", h.model.focus, h.model.todos.detail.ID)
+	}
+	if h.model.toast == nil || h.model.toast.text != "that todo was deleted elsewhere" {
+		t.Errorf("toast = %+v, want one saying the todo was deleted elsewhere", h.model.toast)
+	}
+	for _, it := range h.model.todos.items {
+		if it.ID == id {
+			t.Errorf("%s is still on the list", id)
+		}
+	}
+}
+
+// A todo deleted on another device while it is open closes its pane when the
+// change feed says so. A change to it that is not a delete leaves it open.
+func TestOpenTodoDeletedElsewhereClosesThePane(t *testing.T) {
+	f := sampleAPI()
+	h := newHarness(t, f)
+	h.press("g", "enter")
+	if h.model.focus != focusDetail || h.model.todos.detail.ID != "t1" {
+		t.Fatalf("focus = %v on %q, want t1 open", h.model.focus, h.model.todos.detail.ID)
+	}
+
+	changed := f.todos[0]
+	changed.Title = "Pay the cable bill online"
+	changed.UpdatedAt = time.Now()
+	h.send(feedMsg{seq: h.model.todos.seq, cursor: "next", changes: []api.SyncTodo{{Todo: changed}}})
+	h.run(h.cmds...)
+	h.cmds = nil
+	if h.model.focus != focusDetail || h.model.todos.detail.ID != "t1" {
+		t.Fatalf("a change that is not a delete closed the pane: focus = %v on %q", h.model.focus, h.model.todos.detail.ID)
+	}
+
+	gone := changed
+	at := time.Now()
+	gone.DeletedAt = &at
+	h.send(feedMsg{seq: h.model.todos.seq, cursor: "later", changes: []api.SyncTodo{{Todo: gone}}})
+	h.run(h.cmds...)
+	h.cmds = nil
+	paneClosedOnDelete(t, h, "t1")
+	h.mustContain("that todo was deleted elsewhere")
+}
+
+// A read of the whole account that no longer has the open todo closes its
+// pane too, both when it is the list on screen and when it is the snapshot
+// a narrowed list keeps the counts from. A read that still has it does not.
+func TestOpenTodoMissingFromAFullReadClosesThePane(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		narrow func(*config.Config)
+	}{
+		{"every list", nil},
+		{"one list", func(c *config.Config) { c.ListID = "l1" }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := sampleAPI()
+			h := newHarnessWith(t, f, tc.narrow)
+			fullRead := func() {
+				// With no cursor to follow, the next refresh reads the
+				// whole account rather than the change feed.
+				h.model.todos.cursor, h.model.todos.snapCursor = "", ""
+				h.press("r")
+			}
+			h.press("g", "enter")
+			if h.model.focus != focusDetail || h.model.todos.detail.ID != "t1" {
+				t.Fatalf("focus = %v on %q, want t1 open", h.model.focus, h.model.todos.detail.ID)
+			}
+
+			fullRead()
+			if h.model.focus != focusDetail || h.model.todos.detail.ID != "t1" {
+				t.Fatalf("a read that still has t1 closed the pane: focus = %v on %q", h.model.focus, h.model.todos.detail.ID)
+			}
+
+			f.todos = f.todos[1:]
+			fullRead()
+			paneClosedOnDelete(t, h, "t1")
+		})
+	}
+}
+
+// A delete made here closes the pane the way it always has, with its own
+// receipt, even when the change feed reports the delete before the answer
+// to it arrives.
+func TestDeletingTheOpenTodoHereIsUnchanged(t *testing.T) {
+	f := sampleAPI()
+	h := newHarness(t, f)
+	h.press("g", "enter", "d")
+	h.send(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
+
+	gone := f.todos[0]
+	at := time.Now()
+	gone.DeletedAt = &at
+	h.send(feedMsg{seq: h.model.todos.seq, cursor: "next", changes: []api.SyncTodo{{Todo: gone}}})
+	if h.model.focus != focusDetail || h.model.todos.detail.ID != "t1" {
+		t.Fatalf("the feed closed the pane while the delete made here was on its way: focus = %v on %q", h.model.focus, h.model.todos.detail.ID)
+	}
+	cmds := h.cmds
+	h.cmds = nil
+	h.run(cmds...)
+
+	if h.model.focus != focusList || h.model.todos.detail.ID != "" {
+		t.Errorf("focus = %v on %q, want the list with the pane closed", h.model.focus, h.model.todos.detail.ID)
+	}
+	if h.model.toast == nil || !strings.HasPrefix(h.model.toast.text, `deleted "Pay the cable bill"`) {
+		t.Errorf("toast = %+v, want the receipt for the delete made here", h.model.toast)
+	}
+	if len(f.deletes) != 1 {
+		t.Errorf("deletes = %v, want one", f.deletes)
+	}
+}
+
 func TestCompleteAndReopen(t *testing.T) {
 	f := sampleAPI()
 	h := newHarness(t, f)
