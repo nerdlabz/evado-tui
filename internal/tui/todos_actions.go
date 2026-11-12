@@ -742,6 +742,11 @@ func (v *todosView) refreshAfter(m *Model, msg todoMsg) tea.Cmd {
 		}
 		return v.settleReveal(m)
 	}
+	if msg.action == actionDeleted && msg.deleted != nil {
+		// Taken off at once, so the cursor moves to the next todo instead
+		// of looking for the deleted one in the reload and not finding it.
+		v.drop(msg.deleted.ID)
+	}
 	return v.refresh()
 }
 

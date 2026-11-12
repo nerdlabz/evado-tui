@@ -109,6 +109,60 @@ func TestUndoDeleteRecreatesTheTodo(t *testing.T) {
 	}
 }
 
+// Deleting a todo leaves the cursor where it was, on the todo that took its
+// place, both when the answer is merged in and when the list is read again.
+func TestDeleteKeepsTheCursorsPlace(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		keys []string
+	}{
+		{"every list", nil},
+		{"one list", []string{"h", "G", "k", "enter"}}, // Household
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := sampleAPI()
+			past := time.Now().Add(-48 * time.Hour)
+			for _, id := range []string{"t4", "t5", "t6"} {
+				f.todos = append(f.todos, api.Todo{ID: id, ListID: "l2", Title: "Chore " + id, UpdatedAt: past, CreatedAt: past})
+			}
+			h := newHarness(t, f)
+			h.press(tc.keys...)
+
+			// The second inbox todo, so there is one above it and one below.
+			v := &h.model.todos
+			var inbox []string
+			for _, l := range v.lines {
+				if !l.header && v.sectionOf(v.items[l.index]) == "inbox" {
+					inbox = append(inbox, v.items[l.index].ID)
+				}
+			}
+			if len(inbox) < 3 {
+				t.Fatalf("inbox = %v, want at least three todos", inbox)
+			}
+			v.reveal(inbox[1])
+			h.press("d", "y")
+			if findTodo(f, inbox[1]) != nil {
+				t.Fatalf("%s was not deleted", inbox[1])
+			}
+			if got := h.model.todos.selectedID(); got != inbox[2] {
+				t.Errorf("cursor on %q after the delete, want %q, the todo below", got, inbox[2])
+			}
+
+			// The last one has nothing below it, so the cursor goes up.
+			var shown []string
+			for _, l := range h.model.todos.lines {
+				if !l.header {
+					shown = append(shown, h.model.todos.items[l.index].ID)
+				}
+			}
+			h.press("G", "d", "y")
+			if got, want := h.model.todos.selectedID(), shown[len(shown)-2]; got != want {
+				t.Errorf("cursor on %q after deleting the last todo, want %q above it", got, want)
+			}
+		})
+	}
+}
+
 func TestMarkAndCompleteSeveral(t *testing.T) {
 	f := sampleAPI()
 	h := newHarness(t, f)

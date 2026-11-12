@@ -2,6 +2,7 @@ package tui
 
 import (
 	"math"
+	"slices"
 	"strings"
 	"time"
 
@@ -180,12 +181,54 @@ func (v *todosView) refresh() tea.Cmd {
 // merge folds changes into the loaded todos: upserts replace or add by id,
 // removals drop them. It only makes sense for the unfiltered view.
 func (v *todosView) merge(upserts []api.Todo, removes []string) {
-	keep := v.selectedID()
+	keep := v.keepAfter(removes)
 	out := mergeTodos(v.all, upserts, removes)
 	v.all = out
 	v.snapshot = out
 	v.dropHay()
 	v.applyLive(keep)
+}
+
+// drop takes a deleted todo off the list on screen, for a view that is
+// read again from the server rather than merged into.
+func (v *todosView) drop(id string) {
+	gone := []string{id}
+	keep := v.keepAfter(gone)
+	v.all = mergeTodos(v.all, nil, gone)
+	v.dropHay()
+	v.applyLive(keep)
+}
+
+// keepAfter is the todo the cursor should stay on once the gone ones are
+// removed. When the one under it is going, that is the next todo down, or
+// the one above it at the end, so working down a list deleting todos does
+// not send the cursor back to the top each time. The board keeps its
+// column and row on its own.
+func (v *todosView) keepAfter(gone []string) string {
+	keep := v.selectedID()
+	if keep == "" || v.filter.board || !slices.Contains(gone, keep) {
+		return keep
+	}
+	going := make(map[string]bool, len(gone))
+	for _, id := range gone {
+		going[id] = true
+	}
+	stays := func(r int) bool {
+		l := v.lines[r]
+		return !l.header && !going[v.items[l.index].ID]
+	}
+	at := v.rows.selected()
+	for r := at + 1; r < len(v.lines); r++ {
+		if stays(r) {
+			return v.items[v.lines[r].index].ID
+		}
+	}
+	for r := at - 1; r >= 0; r-- {
+		if stays(r) {
+			return v.items[v.lines[r].index].ID
+		}
+	}
+	return ""
 }
 
 // mergeTodos returns base with the upserts replacing or joining it by id and
