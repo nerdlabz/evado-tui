@@ -32,8 +32,14 @@ func TestLocalMode(t *testing.T) {
 		{"-local=false beats the setup", true, false, "", noAccount, false},
 		{"-local=false beats the environment", true, false, "1", config.Config{}, false},
 		{"EVADO_LOCAL beats a token", false, false, "1", token, true},
-		{"EVADO_LOCAL=0 beats the setup", false, false, "0", noAccount, false},
-		{"EVADO_LOCAL that is not a yes is a no", false, false, "maybe", noAccount, false},
+		{"EVADO_LOCAL=true beats a token", false, false, "true", token, true},
+		// Anything but a yes leaves it to the rows below, as if it were unset.
+		{"EVADO_LOCAL=0 with a token is the server", false, false, "0", token, false},
+		{"EVADO_LOCAL=0 with no token and no choice is the usual error", false, false, "0", config.Config{}, false},
+		{"EVADO_LOCAL=0 keeps the setup without an account", false, false, "0", noAccount, true},
+		{"EVADO_LOCAL=false keeps the setup without an account", false, false, "false", noAccount, true},
+		{"EVADO_LOCAL that is not a yes keeps the setup", false, false, "maybe", noAccount, true},
+		{"EVADO_LOCAL=0 does not use a setup that keeps no todos", false, false, "0", config.Config{Local: true, NoCache: true}, false},
 	} {
 		if got := localMode(c.flagSet, c.flag, c.env, c.cfg); got != c.want {
 			t.Errorf("%s: localMode = %v, want %v", c.name, got, c.want)

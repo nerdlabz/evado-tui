@@ -166,18 +166,19 @@ func main() {
 
 // localMode decides whether a command works on the todos kept on this
 // computer instead of the server. Asking with -local, or -local=false,
-// decides it; then EVADO_LOCAL. Otherwise a token means the server, as it
-// always has, and with no token the todos here are used only if the TUI
-// was set up to go without an account. Anything else is the usual
-// no-token error, so a script whose token went missing fails loudly
-// instead of quietly writing to a file nobody reads.
+// decides it; then EVADO_LOCAL=1. Any other EVADO_LOCAL, 0 included, is the
+// same as none, so a shell that sets it to 0 to mean "not forced" gets the
+// rows below rather than a server it has no token for. Otherwise a token
+// means the server, as it always has, and with no token the todos here are
+// used only if the TUI was set up to go without an account. Anything else
+// is the usual no-token error, so a script whose token went missing fails
+// loudly instead of quietly writing to a file nobody reads.
 func localMode(flagSet, flagVal bool, env string, cfg config.Config) bool {
-	switch {
-	case flagSet:
+	if flagSet {
 		return flagVal
-	case env != "":
-		on, err := strconv.ParseBool(env)
-		return err == nil && on
+	}
+	if on, err := strconv.ParseBool(env); err == nil && on {
+		return true
 	}
 	return cfg.Token == "" && cfg.Local && !cfg.NoCache
 }
