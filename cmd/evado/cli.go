@@ -62,23 +62,24 @@ func serverOnly(args []string) error {
 	}
 }
 
-// wantsJSON reports whether output should be JSON: asked for on the command
-// line, or turned on for the whole environment with EVADO_JSON=1, which is
-// what a script or an agent wants everywhere.
+// wantsJSON reports whether output should be JSON: turned on for the whole
+// environment with EVADO_JSON=1, which is what a script or an agent wants
+// everywhere, and then as the command's own -json flag says, in any spelling
+// the flag package takes (-json, --json, -json=false). It is known before the
+// command runs, because an error from setting up the run, such as a missing
+// token, is printed the same way. The command's own flags are parsed to find
+// out, so that a -json that is the value of another flag (-notes -json) is
+// read as that value here too.
 func wantsJSON(args []string, env string) bool {
-	if env == "1" || strings.EqualFold(env, "true") {
-		return true
+	c := &cli{json: env == "1" || strings.EqualFold(env, "true"), probe: true}
+	if len(args) > 0 {
+		_ = c.dispatch(context.Background(), args[0], args[1:])
 	}
-	for _, a := range args {
-		if a == "--" {
-			break
-		}
-		if a == "-json" || a == "--json" {
-			return true
-		}
-	}
-	return false
+	return c.json
 }
+
+// errProbed ends a command that was run only to read its flags.
+var errProbed = errors.New("flags read")
 
 // cli carries what a command needs.
 type cli struct {
@@ -88,6 +89,9 @@ type cli struct {
 	errw io.Writer
 	in   io.Reader // nil when standard input is a terminal
 	json bool
+	// probe stops a command once its flags are parsed, before anything else
+	// is touched: o and the writers are nil.
+	probe bool
 }
 
 // runCommand runs one non-interactive command. It prints results to out and
@@ -100,7 +104,12 @@ func runCommand(ctx context.Context, o *ops.Ops, args []string, out io.Writer, i
 // result, which are not errors, going to errw.
 func runCommandNoting(ctx context.Context, o *ops.Ops, args []string, out, errw io.Writer, in io.Reader, jsonOut bool) error {
 	c := &cli{o: o, out: out, errw: errw, in: in, json: jsonOut}
-	name, rest := args[0], args[1:]
+	return c.dispatch(ctx, args[0], args[1:])
+}
+
+// dispatch runs the named command. Every command parses its flags before
+// it does anything else, which is what lets wantsJSON run one to read them.
+func (c *cli) dispatch(ctx context.Context, name string, rest []string) error {
 	switch name {
 	case "export":
 		return c.exportFile(ctx, rest)
@@ -140,11 +149,10 @@ func runCommandNoting(ctx context.Context, o *ops.Ops, args []string, out, errw 
 
 func (c *cli) importFile(ctx context.Context, args []string) error {
 	fs := newFlags("import")
-	fs.BoolVar(&c.json, "json", c.json, "JSON output")
 	var opts api.ImportOptions
 	fs.BoolVar(&opts.DryRun, "dry-run", false, "preview without saving")
 	fs.StringVar(&opts.ListID, "list", "", "destination list id")
-	pos, err := parseArgs(fs, args, "import [-dry-run] [-list id] [-json] <file | ->")
+	pos, err := c.parseArgs(fs, args, "import [-dry-run] [-list id] [-json] <file | ->")
 	if err != nil {
 		return err
 	}
@@ -230,8 +238,7 @@ func importReceipt(r api.ImportResult) string {
 
 func (c *cli) exportFile(ctx context.Context, args []string) error {
 	fs := newFlags("export")
-	fs.BoolVar(&c.json, "json", c.json, "JSON output")
-	pos, err := parseArgs(fs, args, "export [file | -]")
+	pos, err := c.parseArgs(fs, args, "export [file | -]")
 	if err != nil {
 		return err
 	}
@@ -262,10 +269,26 @@ func newFlags(name string) *flag.FlagSet {
 	return fs
 }
 
-// parseArgs parses flags wherever they appear among the arguments, which is
+// parseArgs adds the -json flag every command takes to fs and parses the
+// arguments with parseFlags. Registering it here, once, is what keeps
+// wantsJSON and the command agreeing on it.
+func (c *cli) parseArgs(fs *flag.FlagSet, args []string, synopsis string) ([]string, error) {
+	fs.BoolVar(&c.json, "json", c.json, "print JSON")
+	pos, err := parseFlags(fs, args, synopsis, c.probe)
+	if c.probe {
+		return nil, errProbed
+	}
+	return pos, err
+}
+
+// parseFlags parses flags wherever they appear among the arguments, which is
 // how people and agents actually write them (evado edit abc -title x), and
 // returns the positional arguments. Everything after -- is positional.
-func parseArgs(fs *flag.FlagSet, args []string, synopsis string) ([]string, error) {
+//
+// With keepGoing a flag that does not parse is skipped rather than ending
+// the parse, so that a -json after a mistyped flag still has the usage error
+// printed as JSON.
+func parseFlags(fs *flag.FlagSet, args []string, synopsis string, keepGoing bool) ([]string, error) {
 	var tail []string
 	for i, a := range args {
 		if a == "--" {
@@ -276,7 +299,17 @@ func parseArgs(fs *flag.FlagSet, args []string, synopsis string) ([]string, erro
 	var pos []string
 	for {
 		if err := fs.Parse(args); err != nil {
-			return nil, &usageErr{fmt.Sprintf("%v\nusage: evado %s", err, synopsis)}
+			if !keepGoing {
+				return nil, &usageErr{fmt.Sprintf("%v\nusage: evado %s", err, synopsis)}
+			}
+			// Bad flag syntax (---x) is refused before the flag package
+			// steps past it.
+			if rest := fs.Args(); len(rest) < len(args) {
+				args = rest
+			} else {
+				args = args[1:]
+			}
+			continue
 		}
 		rest := fs.Args()
 		if len(rest) == 0 {
@@ -338,8 +371,7 @@ func (c *cli) add(ctx context.Context, args []string) error {
 	list := fs.String("list", "", "add to this list instead of your personal list")
 	notes := fs.String("notes", "", "notes for the todo")
 	id := fs.String("id", "", "an id of your choosing, so a retried add is recognisable")
-	fs.Bool("json", false, "print JSON")
-	pos, err := parseArgs(fs, args, addSynopsis)
+	pos, err := c.parseArgs(fs, args, addSynopsis)
 	if err != nil {
 		return err
 	}
@@ -387,8 +419,7 @@ func (c *cli) list(ctx context.Context, args []string) error {
 	limit := fs.Int("limit", 0, "most todos to return, default 200; more than 200 is read a page at a time")
 	cursor := fs.String("cursor", "", "carry on after the todos an earlier ls stopped at: its nextCursor, with the same filters")
 	full := fs.Bool("full-ids", false, "print whole ids instead of the first eight characters")
-	fs.Bool("json", false, "print JSON")
-	pos, err := parseArgs(fs, args, listSynopsis)
+	pos, err := c.parseArgs(fs, args, listSynopsis)
 	if err != nil {
 		return err
 	}
@@ -430,8 +461,7 @@ const showSynopsis = "show [-json] <id>"
 
 func (c *cli) show(ctx context.Context, args []string) error {
 	fs := newFlags("show")
-	fs.Bool("json", false, "print JSON")
-	pos, err := parseArgs(fs, args, showSynopsis)
+	pos, err := c.parseArgs(fs, args, showSynopsis)
 	if err != nil {
 		return err
 	}
@@ -488,8 +518,7 @@ const doneSynopsis = "done|undone [-json] <id>..."
 
 func (c *cli) setDone(ctx context.Context, args []string, done bool) error {
 	fs := newFlags("done")
-	fs.Bool("json", false, "print JSON")
-	pos, err := parseArgs(fs, args, doneSynopsis)
+	pos, err := c.parseArgs(fs, args, doneSynopsis)
 	if err != nil {
 		return err
 	}
@@ -538,8 +567,7 @@ func (c *cli) edit(ctx context.Context, args []string) error {
 		vals[name] = fs.String(name, "", "")
 	}
 	done := fs.Bool("done", false, "true marks it done and false reopens it")
-	fs.Bool("json", false, "print JSON")
-	pos, err := parseArgs(fs, args, editSynopsis)
+	pos, err := c.parseArgs(fs, args, editSynopsis)
 	if err != nil {
 		return err
 	}
@@ -582,8 +610,7 @@ const claimSynopsis = "claim|release [-json] <id>   (shared lists only)"
 func (c *cli) assignment(ctx context.Context, args []string, claim bool) error {
 	name := map[bool]string{true: "claim", false: "release"}[claim]
 	fs := newFlags(name)
-	fs.Bool("json", false, "print JSON")
-	pos, err := parseArgs(fs, args, claimSynopsis)
+	pos, err := c.parseArgs(fs, args, claimSynopsis)
 	if err != nil {
 		return err
 	}
@@ -614,8 +641,7 @@ const rmSynopsis = "rm -yes [-json] <id>...   (without -yes nothing is deleted)"
 func (c *cli) remove(ctx context.Context, args []string) error {
 	fs := newFlags("rm")
 	yes := fs.Bool("yes", false, "really delete")
-	fs.Bool("json", false, "print JSON")
-	pos, err := parseArgs(fs, args, rmSynopsis)
+	pos, err := c.parseArgs(fs, args, rmSynopsis)
 	if err != nil {
 		return err
 	}
@@ -654,8 +680,7 @@ const stepSynopsis = "step [-json] <id> <text>   (shorthand for steps add)"
 
 func (c *cli) step(ctx context.Context, args []string) error {
 	fs := newFlags("step")
-	fs.Bool("json", false, "print JSON")
-	pos, err := parseArgs(fs, args, stepSynopsis)
+	pos, err := c.parseArgs(fs, args, stepSynopsis)
 	if err != nil {
 		return err
 	}
@@ -704,6 +729,8 @@ func (c *cli) steps(ctx context.Context, args []string) error {
 	case "rm":
 		return c.stepsRemove(ctx, rest)
 	}
+	// Only for -json, so the refusal is printed the way it was asked for.
+	_, _ = c.parseArgs(newFlags("steps"), rest, stepsSynopsis)
 	return &usageErr{fmt.Sprintf("unknown steps command %q\nusage: evado %s", sub, stepsSynopsis)}
 }
 
@@ -711,8 +738,7 @@ func (c *cli) stepsList(ctx context.Context, args []string) error {
 	const syn = "steps list [-full-ids] [-json] <todo>"
 	fs := newFlags("steps list")
 	full := fs.Bool("full-ids", false, "print whole step ids instead of a short form")
-	fs.Bool("json", false, "print JSON")
-	pos, err := parseArgs(fs, args, syn)
+	pos, err := c.parseArgs(fs, args, syn)
 	if err != nil {
 		return err
 	}
@@ -774,8 +800,7 @@ func stepMark(s api.ChecklistItem) string {
 func (c *cli) stepsAdd(ctx context.Context, args []string) error {
 	const syn = "steps add [-json] <todo> <text>"
 	fs := newFlags("steps add")
-	fs.Bool("json", false, "print JSON")
-	pos, err := parseArgs(fs, args, syn)
+	pos, err := c.parseArgs(fs, args, syn)
 	if err != nil {
 		return err
 	}
@@ -789,8 +814,7 @@ func (c *cli) stepsSetDone(ctx context.Context, args []string, done bool) error 
 	name := map[bool]string{true: "done", false: "undone"}[done]
 	syn := "steps " + name + " [-json] <todo> <step>"
 	fs := newFlags("steps " + name)
-	fs.Bool("json", false, "print JSON")
-	pos, err := parseArgs(fs, args, syn)
+	pos, err := c.parseArgs(fs, args, syn)
 	if err != nil {
 		return err
 	}
@@ -815,8 +839,7 @@ func (c *cli) stepsEdit(ctx context.Context, args []string) error {
 	const syn = "steps edit [-title t] [-json] <todo> <step> [text]"
 	fs := newFlags("steps edit")
 	title := fs.String("title", "", "the new title; the words after the step id work too")
-	fs.Bool("json", false, "print JSON")
-	pos, err := parseArgs(fs, args, syn)
+	pos, err := c.parseArgs(fs, args, syn)
 	if err != nil {
 		return err
 	}
@@ -848,8 +871,7 @@ func (c *cli) stepsRemove(ctx context.Context, args []string) error {
 	const syn = "steps rm -yes [-json] <todo> <step>   (without -yes nothing is deleted)"
 	fs := newFlags("steps rm")
 	yes := fs.Bool("yes", false, "really delete")
-	fs.Bool("json", false, "print JSON")
-	pos, err := parseArgs(fs, args, syn)
+	pos, err := c.parseArgs(fs, args, syn)
 	if err != nil {
 		return err
 	}
@@ -877,11 +899,10 @@ func (c *cli) changes(ctx context.Context, args []string) error {
 	fs := newFlags("changes")
 	since := fs.String("since", "", "read changes made after this cursor, the \"cursor\" an earlier run printed; leave out to read everything")
 	maxPages := fs.Int("max-pages", ops.DefaultFeedPages, "most pages to read, 200 changes each")
-	fs.Bool("json", false, "print JSON")
 	for _, name := range feedFilterFlags {
 		fs.String(name, "", "")
 	}
-	pos, err := parseArgs(fs, args, changesSynopsis)
+	pos, err := c.parseArgs(fs, args, changesSynopsis)
 	if err != nil {
 		return err
 	}
@@ -948,8 +969,7 @@ const listsSynopsis = "lists [-json]"
 
 func (c *cli) lists(ctx context.Context, args []string) error {
 	fs := newFlags("lists")
-	fs.Bool("json", false, "print JSON")
-	pos, err := parseArgs(fs, args, listsSynopsis)
+	pos, err := c.parseArgs(fs, args, listsSynopsis)
 	if err != nil {
 		return err
 	}
@@ -984,8 +1004,7 @@ const parseSynopsis = "parse [-json] <text>"
 
 func (c *cli) parse(ctx context.Context, args []string) error {
 	fs := newFlags("parse")
-	fs.Bool("json", false, "print JSON")
-	pos, err := parseArgs(fs, args, parseSynopsis)
+	pos, err := c.parseArgs(fs, args, parseSynopsis)
 	if err != nil {
 		return err
 	}

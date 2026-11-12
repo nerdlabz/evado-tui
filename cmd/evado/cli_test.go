@@ -42,17 +42,66 @@ func TestIsCommand(t *testing.T) {
 }
 
 func TestWantsJSON(t *testing.T) {
-	if !wantsJSON([]string{"ls", "-json"}, "") || !wantsJSON([]string{"ls", "--json"}, "") {
-		t.Error("-json should turn it on")
+	for _, c := range []struct {
+		name string
+		args []string
+		env  string
+		want bool
+	}{
+		{"off by default", []string{"ls"}, "", false},
+		{"-json", []string{"ls", "-json"}, "", true},
+		{"--json", []string{"ls", "--json"}, "", true},
+		{"-json=true", []string{"ls", "-json=true"}, "", true},
+		{"--json=1", []string{"ls", "--json=1"}, "", true},
+		{"after the id", []string{"show", "aaa111", "-json=true"}, "", true},
+		{"on a steps command", []string{"steps", "done", "aaa111", "s1", "-json=t"}, "", true},
+		{"on import", []string{"import", "-json=true", "-"}, "", true},
+		{"EVADO_JSON=1", []string{"ls"}, "1", true},
+		{"EVADO_JSON=true", []string{"ls"}, "true", true},
+		{"-json=false beats EVADO_JSON", []string{"ls", "-json=false"}, "1", false},
+		{"the last one wins", []string{"ls", "-json", "-json=false"}, "", false},
+		{"after -- it is text", []string{"add", "--", "-json"}, "", false},
+		{"the value of another flag", []string{"edit", "aaa111", "-notes", "-json"}, "", false},
+		{"after a flag that does not parse", []string{"ls", "-limt", "5", "-json"}, "", true},
+		{"on an unknown steps command", []string{"steps", "bogus", "-json=true"}, "", true},
+	} {
+		if got := wantsJSON(c.args, c.env); got != c.want {
+			t.Errorf("%s: wantsJSON(%q, %q) = %v, want %v", c.name, c.args, c.env, got, c.want)
+		}
 	}
-	if !wantsJSON([]string{"ls"}, "1") || !wantsJSON([]string{"ls"}, "true") {
-		t.Error("EVADO_JSON should turn it on")
+	// Each command is run to read its flags, with no account behind it, so
+	// each must stop at its flags.
+	for _, name := range commandNames {
+		args := []string{name, "x", "y", "-json=true"}
+		if name == "steps" {
+			args = []string{name, "list", "x", "-json=true"}
+		}
+		if !wantsJSON(args, "") {
+			t.Errorf("%s -json=true: wantsJSON = false", name)
+		}
 	}
-	if wantsJSON([]string{"add", "--", "-json"}, "") {
-		t.Error("-json after -- is text, not a flag")
+}
+
+// The output follows the same -json the error printing does, however it is
+// spelled, and a -json that is another flag's value is only that value.
+func TestJSONFlagIsReadAsTheFlagPackageReadsIt(t *testing.T) {
+	f := testapi.New()
+	out, err := run(t, f, "", "ls", "-json=true")
+	if err != nil || !json.Valid([]byte(out)) {
+		t.Errorf("ls -json=true printed %q %v, want JSON", out, err)
 	}
-	if wantsJSON([]string{"ls"}, "") {
-		t.Error("off by default")
+	args := []string{"ls", "-json=false"}
+	var b bytes.Buffer
+	err = runCommand(context.Background(), ops.New(f.Client(t)), args, &b, nil, wantsJSON(args, "1"))
+	if err != nil || !strings.Contains(b.String(), "aaa111  ○") {
+		t.Errorf("EVADO_JSON=1 ls -json=false printed %q %v, want text", b.String(), err)
+	}
+	out, err = run(t, f, "", "edit", "aaa111", "-notes", "-json")
+	if err != nil || !strings.HasPrefix(out, "saved aaa111") {
+		t.Errorf("edit -notes -json printed %q %v, want text", out, err)
+	}
+	if p := f.Patches[len(f.Patches)-1]; string(p["notes"]) != `"-json"` {
+		t.Errorf("patch = %v, want the notes set to the literal -json", p)
 	}
 }
 
