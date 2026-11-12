@@ -10,6 +10,21 @@ The workflow refuses a tag that is not a plain `vX.Y.Z` or does not match
 properties, and checks that the built Linux and signed macOS binaries both
 report `evado X.Y.Z` before anything is published.
 
+## Runners
+
+CI and the release build run on Blacksmith's 2 vCPU Linux and Windows
+runners, and on GitHub's macOS runners. Pull requests from forks use
+GitHub-hosted runners only. To move everything to GitHub-hosted runners, for
+instance when Blacksmith's minutes run out, set a repository variable; set it
+back to `blacksmith`, or delete it, to return:
+
+```sh
+gh variable set CI_RUNNERS -R nerdlabz/evado-tui --body github
+```
+
+The macOS signing job always runs on GitHub's runners, because it holds the
+release keys.
+
 ## Cutting a release
 
 1. Set `VERSION` to the new version, without the leading `v`, and merge it.

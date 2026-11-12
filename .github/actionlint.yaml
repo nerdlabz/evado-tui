@@ -1,6 +1,6 @@
 self-hosted-runner:
-  # Blacksmith's runner labels, used for everything except pull requests from forks.
+  # Blacksmith's runner labels. See the note at the top of ci.yml.
   labels:
-    - blacksmith-4vcpu-ubuntu-2404
-    - blacksmith-6vcpu-macos-26
-    - blacksmith-4vcpu-windows-2025
+    - blacksmith-2vcpu-ubuntu-2404
+    - blacksmith-2vcpu-ubuntu-2404-arm
+    - blacksmith-2vcpu-windows-2025

@@ -12,13 +12,21 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# Pull requests from forks run on GitHub-hosted runners, which are free for a
-# public repository and keep code from outside the project off paid machines.
-# Everything else runs on Blacksmith. Both sides use the same OS versions, so a
-# change that passes on one passes on the other.
+# Linux and Windows run on Blacksmith's smallest runners. macOS runs on
+# GitHub's, where it is as fast and costs far less.
+#
+# Pull requests from forks always use GitHub-hosted runners, which are free
+# for a public repository and keep code from outside the project off paid
+# machines. Setting the repository variable CI_RUNNERS to "github" moves
+# every job there, for when Blacksmith's minutes run out:
+#
+#   gh variable set CI_RUNNERS --body github     # and --body blacksmith to go back
+#
+# Both sides use the same OS versions, so a change that passes on one passes
+# on the other.
 jobs:
   check:
-    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-24.04' || 'blacksmith-4vcpu-ubuntu-2404' }}
+    runs-on: ${{ (github.event.pull_request.head.repo.fork || vars.CI_RUNNERS == 'github') && 'ubuntu-24.04' || 'blacksmith-2vcpu-ubuntu-2404' }}
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v2
@@ -33,13 +41,16 @@ jobs:
     strategy:
       matrix:
         include:
+          - name: linux-arm64
+            github: ubuntu-24.04-arm
+            blacksmith: blacksmith-2vcpu-ubuntu-2404-arm
           - name: macos
             github: macos-26
-            blacksmith: blacksmith-6vcpu-macos-26
+            blacksmith: macos-26
           - name: windows
             github: windows-2025
-            blacksmith: blacksmith-4vcpu-windows-2025
-    runs-on: ${{ github.event.pull_request.head.repo.fork && matrix.github || matrix.blacksmith }}
+            blacksmith: blacksmith-2vcpu-windows-2025
+    runs-on: ${{ (github.event.pull_request.head.repo.fork || vars.CI_RUNNERS == 'github') && matrix.github || matrix.blacksmith }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
