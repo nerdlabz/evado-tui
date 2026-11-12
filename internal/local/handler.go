@@ -788,6 +788,14 @@ func (b *Backend) createTodos(w http.ResponseWriter, r *http.Request) {
 			if t := b.find(n.ID); t != nil {
 				return http.StatusOK, map[string]any{"todos": []api.Todo{t.Todo}, "idempotent": true}
 			}
+			// A deletion still to be sent keeps its id here. A second todo
+			// under it would be two todos with one id, and the service keeps a
+			// deleted todo deleted whatever reaches it later.
+			for i := range b.st.Todos {
+				if b.st.Todos[i].ID == n.ID {
+					return 0, problem{http.StatusConflict, api.CodeConflict, "id: a deleted todo has this id"}
+				}
+			}
 		}
 		made := []api.Todo{}
 		for _, line := range lines {
@@ -850,6 +858,10 @@ func (b *Backend) newTodo(n api.NewTodo, line, listID string, parsed Parsed) (To
 	if p != nil {
 		return t, p
 	}
+	completed, p := read("completedAt", n.CompletedAt)
+	if p != nil {
+		return t, p
+	}
 	t.DueAt = due
 	switch {
 	case do != nil:
@@ -878,10 +890,8 @@ func (b *Backend) newTodo(n api.NewTodo, line, listID string, parsed Parsed) (To
 	if n.IsCompleted != nil && *n.IsCompleted {
 		t.IsCompleted = true
 		at := now
-		if n.CompletedAt != nil {
-			if c, ok := b.instant(*n.CompletedAt); ok {
-				at = *c
-			}
+		if completed != nil {
+			at = *completed
 		}
 		t.CompletedAt = &at
 	}
@@ -1260,7 +1270,9 @@ func (b *Backend) patchTodo(id string, patch map[string]json.RawMessage) (int, a
 		}
 	}
 	if raw, ok := patch["sortOrder"]; ok {
-		_ = json.Unmarshal(raw, &next.SortOrder)
+		if err := json.Unmarshal(raw, &next.SortOrder); err != nil {
+			return 0, invalid("sortOrder: expected a whole number")
+		}
 		touched = append(touched, fSort)
 	}
 	if raw, ok := patch["assigneeId"]; ok {

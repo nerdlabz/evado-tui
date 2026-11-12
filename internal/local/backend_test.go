@@ -1312,6 +1312,82 @@ func TestRejectedStepPatchChangesNothing(t *testing.T) {
 	}
 }
 
+// A todo deleted here keeps its id until the deletion reaches the service.
+// Creating under that id again must not make a second todo beside it.
+func TestCreatingUnderADeletedTodosIDIsRefused(t *testing.T) {
+	ctx := context.Background()
+	svc, b, c := aheadOfService(t)
+	id := NewID()
+	if _, err := c.CreateTodos(ctx, api.NewTodo{ID: id, Title: "Renew the passport"}); err != nil {
+		t.Fatal(err)
+	}
+	mustSync(t, b)
+	if err := c.DeleteTodo(ctx, id); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := c.CreateTodos(ctx, api.NewTodo{ID: id, Title: "Renew the passport"}); api.CodeOf(err) != api.CodeConflict {
+		t.Fatalf("create under a deleted todo's id: %v, want a conflict", err)
+	}
+	b.mu.Lock()
+	var kept []Todo
+	for _, td := range b.st.Todos {
+		if td.ID == id {
+			kept = append(kept, td)
+		}
+	}
+	b.mu.Unlock()
+	if len(kept) != 1 || kept[0].DeletedAt == nil {
+		t.Fatalf("todos with the id = %+v, want only the deleted one", kept)
+	}
+	mustSync(t, b)
+	if up := svc.todos[id]; up == nil || up.DeletedAt == nil {
+		t.Errorf("service has %+v, want the todo deleted", up)
+	}
+}
+
+// The dates a create gives are read or refused, a completion's included,
+// so a typo does not quietly become the time it was sent.
+func TestUnreadableCompletionIsRefused(t *testing.T) {
+	ctx := context.Background()
+	b := open(t, "", "")
+	c := b.Client()
+	done, when := true, "not a time"
+	if _, err := c.CreateTodos(ctx, api.NewTodo{Title: "Filed the taxes", IsCompleted: &done, CompletedAt: &when}); api.CodeOf(err) != api.CodeInvalidRequest {
+		t.Fatalf("create with an unreadable completedAt: %v, want it refused", err)
+	}
+	if got := titles(t, c); len(got) != 0 {
+		t.Errorf("todos = %v, want none made", got)
+	}
+
+	when = "2030-04-15T09:30:00Z"
+	made, err := c.CreateTodos(ctx, api.NewTodo{Title: "Filed the taxes", IsCompleted: &done, CompletedAt: &when})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if at := made[0].CompletedAt; at == nil || !at.Equal(time.Date(2030, 4, 15, 9, 30, 0, 0, time.UTC)) {
+		t.Errorf("completedAt = %v, want the one given", at)
+	}
+}
+
+func TestSortOrderThatIsNotAWholeNumberIsRefused(t *testing.T) {
+	ctx := context.Background()
+	b := open(t, "", "")
+	c := b.Client()
+	todo := add(t, c, "Water the plants")
+	if _, _, err := c.UpdateTodo(ctx, todo.ID, api.TodoPatch{SortOrder: json.RawMessage("4")}); err != nil {
+		t.Fatal(err)
+	}
+	for _, raw := range []string{`"first"`, `1.5`, `true`} {
+		if _, _, err := c.UpdateTodo(ctx, todo.ID, api.TodoPatch{Title: api.Val("Renamed"), SortOrder: json.RawMessage(raw)}); api.CodeOf(err) != api.CodeInvalidRequest {
+			t.Errorf("sortOrder %s: %v, want it refused", raw, err)
+		}
+	}
+	if got := get(t, c, todo.ID); got.SortOrder != 4 || got.Title != "Water the plants" {
+		t.Errorf("todo = %q at %d, want it unchanged", got.Title, got.SortOrder)
+	}
+}
+
 func TestFilters(t *testing.T) {
 	ctx := context.Background()
 	b := open(t, "", "")
