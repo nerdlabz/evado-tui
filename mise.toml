@@ -44,3 +44,28 @@ run = "go test -race ./..."
 [tasks.check]
 description = "Format check, vet, and lint"
 run = ['test -z "$(gofumpt -l .)"', "go vet ./...", "golangci-lint run"]
+
+# Which runners CI and releases use. See "Runners" in docs/releasing.md.
+[tasks."ci:runners"]
+description = "Show which runners CI uses"
+run = """
+if [ "$(gh variable get CI_RUNNERS -R nerdlabz/evado-tui 2>/dev/null)" = github ]; then
+  echo "CI runs on GitHub-hosted runners. Switch back with: mise run ci:blacksmith"
+else
+  echo "CI runs on Blacksmith, with macOS and pull requests from forks on GitHub. Switch with: mise run ci:github"
+fi
+"""
+
+[tasks."ci:github"]
+description = "Run all of CI and releases on GitHub-hosted runners"
+run = """
+gh variable set CI_RUNNERS -R nerdlabz/evado-tui --body github
+echo "New runs use GitHub-hosted runners. Re-run a queued or failed run to move it."
+"""
+
+[tasks."ci:blacksmith"]
+description = "Run CI and releases on Blacksmith again"
+run = """
+gh variable delete CI_RUNNERS -R nerdlabz/evado-tui 2>/dev/null || true
+echo "New runs use Blacksmith. Re-run a queued or failed run to move it."
+"""

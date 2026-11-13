@@ -15,12 +15,17 @@ report `evado X.Y.Z` before anything is published.
 CI and the release build run on Blacksmith's 2 vCPU Linux and Windows
 runners, and on GitHub's macOS runners. Pull requests from forks use
 GitHub-hosted runners only. To move everything to GitHub-hosted runners, for
-instance when Blacksmith's minutes run out, set a repository variable; set it
-back to `blacksmith`, or delete it, to return:
+instance when Blacksmith's minutes run out, and back:
 
 ```sh
-gh variable set CI_RUNNERS -R nerdlabz/evado-tui --body github
+mise run ci:github       # every job on GitHub-hosted runners
+mise run ci:blacksmith   # back to Blacksmith
+mise run ci:runners      # which one is in use
 ```
+
+These set and delete the repository variable `CI_RUNNERS`, so they need write
+access to the repository. A run already queued keeps its runners; re-run it
+to move it.
 
 The macOS signing job always runs on GitHub's runners, because it holds the
 release keys.

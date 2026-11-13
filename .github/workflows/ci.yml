@@ -20,7 +20,7 @@ concurrency:
 # machines. Setting the repository variable CI_RUNNERS to "github" moves
 # every job there, for when Blacksmith's minutes run out:
 #
-#   gh variable set CI_RUNNERS --body github     # and --body blacksmith to go back
+#   mise run ci:github       # and mise run ci:blacksmith to go back
 #
 # Both sides use the same OS versions, so a change that passes on one passes
 # on the other.
