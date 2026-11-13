@@ -29,7 +29,8 @@ Run these checks on the generated `.rb` file, not the `.in` template:
 ```sh
 ruby -c Formula/evado.rb
 brew style Formula/evado.rb
-brew audit --formula nerdlabz/tap/evado
+brew trust --formula nerdlabz/tap/evado   # Homebrew loads only trusted tap formulae
+brew audit --strict --formula nerdlabz/tap/evado
 ```
 
 Once the release is published, check installation and the formula test on

@@ -2,7 +2,6 @@ class Evado < Formula
   desc "Terminal client for Evado todos"
   homepage "https://evado.app"
   license "MIT"
-  version "@VERSION@"
 
   on_macos do
     on_arm do
