@@ -70,6 +70,10 @@ The commands are `add`, `ls`, `show`, `done`, `undone`, `edit`, `claim`,
 `-token` go before the command. Every command takes `-json`, and `EVADO_JSON=1` makes that
 the default. Other flags can come before or after the arguments.
 
+`evado help` prints the usage, and `evado help <command>` or `evado <command>
+-h` prints one command's synopsis and flags. Help goes to standard output,
+exits 0, and needs no token.
+
 `add -` takes any number of lines. The service reads at most 2000 characters
 and 20 lines at a time, so longer input goes up in batches, in order. If a
 batch fails, the todos already added are printed before the error, so re-run
@@ -308,7 +312,7 @@ or 2 if the timezone is not one this computer knows.
 | --- | --- |
 | 0 | ok |
 | 1 | unexpected failure, or a config file that cannot be read |
-| 2 | usage: bad arguments, an ambiguous id, or a delete without `-yes` |
+| 2 | usage: bad arguments, an unknown command, an ambiguous id, or a delete without `-yes` |
 | 3 | no token, or it was rejected |
 | 4 | no such todo or list |
 | 5 | rate limited; `retryAfterSeconds` says when to try again |

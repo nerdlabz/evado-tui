@@ -172,7 +172,8 @@ writes it to the config file.
 ### From a script or an agent
 
 Commands run without the TUI: `add`, `ls`, `show`, `done`, `undone`, `edit`,
-`claim`, `release`, `rm`, `step`, `steps`, `changes`, `lists` and `parse`.
+`claim`, `release`, `rm`, `step`, `steps`, `changes`, `lists`, `parse`,
+`export` and `import`.
 They suit shell aliases, cron and any agent that can run a command, and they
 use the same token and server as the app, or `EVADO_TOKEN` and `EVADO_SERVER`.
 Agents that speak MCP should use the service's own MCP endpoint, described in
@@ -189,8 +190,9 @@ evado rm -yes 3fa9c1                         # nothing is deleted without -yes
 
 Every command takes `-json`, ids can be shortened to a unique prefix, and
 exit codes say what went wrong. `ls` returns 200 todos unless `-limit` says
-otherwise, and says when more match. [AGENTS.md](AGENTS.md) lists the commands
-and codes in full.
+otherwise, and says when more match. `evado help` lists the commands, and
+`evado <command> -h` prints one command's flags. [AGENTS.md](AGENTS.md) lists
+the commands and codes in full.
 
 The same commands work on the todos the app keeps on this computer, with no
 token and no connection:

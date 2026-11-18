@@ -81,6 +81,19 @@ func wantsJSON(args []string, env string) bool {
 // errProbed ends a command that was run only to read its flags.
 var errProbed = errors.New("flags read")
 
+// commandHelp is what a command prints when asked for help with -h, -help
+// or --help: its synopsis and its flags. Like wantsJSON it is read from the
+// command's own flags before the run is set up, so help needs no token and
+// opens no file, and a -h that is another flag's value (-notes -h) is not
+// taken for it.
+func commandHelp(args []string) (string, bool) {
+	c := &cli{probe: true}
+	if len(args) > 0 {
+		_ = c.dispatch(context.Background(), args[0], args[1:])
+	}
+	return c.help, c.help != ""
+}
+
 // cli carries what a command needs.
 type cli struct {
 	o   *ops.Ops
@@ -92,6 +105,8 @@ type cli struct {
 	// probe stops a command once its flags are parsed, before anything else
 	// is touched: o and the writers are nil.
 	probe bool
+	// help is set by a probe whose flags asked for help.
+	help string
 }
 
 // runCommand runs one non-interactive command. It prints results to out and
@@ -276,6 +291,13 @@ func (c *cli) parseArgs(fs *flag.FlagSet, args []string, synopsis string) ([]str
 	fs.BoolVar(&c.json, "json", c.json, "print JSON")
 	pos, err := parseFlags(fs, args, synopsis, c.probe)
 	if c.probe {
+		if errors.Is(err, flag.ErrHelp) {
+			var b strings.Builder
+			fmt.Fprintf(&b, "usage: evado %s\n\nflags:\n", synopsis)
+			fs.SetOutput(&b)
+			fs.PrintDefaults()
+			c.help = b.String()
+		}
 		return nil, errProbed
 	}
 	return pos, err
@@ -287,7 +309,8 @@ func (c *cli) parseArgs(fs *flag.FlagSet, args []string, synopsis string) ([]str
 //
 // With keepGoing a flag that does not parse is skipped rather than ending
 // the parse, so that a -json after a mistyped flag still has the usage error
-// printed as JSON.
+// printed as JSON. A request for help among them is reported as
+// flag.ErrHelp once everything has been read.
 func parseFlags(fs *flag.FlagSet, args []string, synopsis string, keepGoing bool) ([]string, error) {
 	var tail []string
 	for i, a := range args {
@@ -297,10 +320,14 @@ func parseFlags(fs *flag.FlagSet, args []string, synopsis string, keepGoing bool
 		}
 	}
 	var pos []string
+	var help error
 	for {
 		if err := fs.Parse(args); err != nil {
 			if !keepGoing {
 				return nil, &usageErr{fmt.Sprintf("%v\nusage: evado %s", err, synopsis)}
+			}
+			if errors.Is(err, flag.ErrHelp) {
+				help = err
 			}
 			// Bad flag syntax (---x) is refused before the flag package
 			// steps past it.
@@ -313,7 +340,7 @@ func parseFlags(fs *flag.FlagSet, args []string, synopsis string, keepGoing bool
 		}
 		rest := fs.Args()
 		if len(rest) == 0 {
-			return append(pos, tail...), nil
+			return append(pos, tail...), help
 		}
 		pos = append(pos, rest[0])
 		args = rest[1:]
@@ -568,8 +595,18 @@ const editSynopsis = "edit <id> [-title t] [-notes n] [-list name] [-day d] [-at
 func (c *cli) edit(ctx context.Context, args []string) error {
 	fs := newFlags("edit")
 	vals := map[string]*string{}
-	for _, name := range []string{"title", "notes", "list", "day", "at", "due", "remind", "repeat", "assign"} {
-		vals[name] = fs.String(name, "", "")
+	for _, f := range [][2]string{
+		{"title", "the new title"},
+		{"notes", "the new notes; none clears them"},
+		{"list", "move it to this list"},
+		{"day", "the day it is planned for, with no time; none clears it"},
+		{"at", "the do date, with a time or a day alone; none clears it"},
+		{"due", "the deadline; none clears it"},
+		{"remind", "when to send a reminder; none clears it"},
+		{"repeat", "a repeat such as \"every monday\"; none clears it"},
+		{"assign", "a list member's email, or anyone"},
+	} {
+		vals[f[0]] = fs.String(f[0], "", f[1])
 	}
 	done := fs.Bool("done", false, "true marks it done and false reopens it")
 	pos, err := c.parseArgs(fs, args, editSynopsis)
@@ -734,7 +771,11 @@ func (c *cli) steps(ctx context.Context, args []string) error {
 	case "rm":
 		return c.stepsRemove(ctx, rest)
 	}
-	// Only for -json, so the refusal is printed the way it was asked for.
+	// Only for -json and -h, so the refusal is printed the way it was asked
+	// for and "steps -h" lists the steps commands.
+	if strings.HasPrefix(sub, "-") {
+		rest = args
+	}
 	_, _ = c.parseArgs(newFlags("steps"), rest, stepsSynopsis)
 	return &usageErr{fmt.Sprintf("unknown steps command %q\nusage: evado %s", sub, stepsSynopsis)}
 }
@@ -905,7 +946,7 @@ func (c *cli) changes(ctx context.Context, args []string) error {
 	since := fs.String("since", "", "read changes made after this cursor, the \"cursor\" an earlier run printed; leave out to read everything")
 	maxPages := fs.Int("max-pages", ops.DefaultFeedPages, "most pages to read, 200 changes each")
 	for _, name := range feedFilterFlags {
-		fs.String(name, "", "")
+		fs.String(name, "", "refused: the feed takes no filters")
 	}
 	pos, err := c.parseArgs(fs, args, changesSynopsis)
 	if err != nil {

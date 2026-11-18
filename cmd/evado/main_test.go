@@ -33,21 +33,8 @@ func TestMainProcess(t *testing.T) {
 // with the config at cfgPath and nothing from the shell running the tests.
 func runMain(t *testing.T, cfgPath string, env []string, args ...string) (stderr string, code int) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	defer cancel()
-	cmd := exec.CommandContext(ctx, os.Args[0], append([]string{"-test.run=^TestMainProcess$", "--"}, args...)...)
-	cmd.Env = append(os.Environ(),
-		"EVADO_TEST_MAIN=1", "EVADO_CONFIG="+cfgPath,
-		"EVADO_TOKEN=", "EVADO_SERVER=", "EVADO_LOCAL=", "EVADO_JSON=")
-	cmd.Env = append(cmd.Env, env...)
-	var errOut bytes.Buffer
-	cmd.Stderr = &errOut
-	err := cmd.Run()
-	var exit *exec.ExitError
-	if err != nil && !errors.As(err, &exit) {
-		t.Fatalf("evado %v: %v", args, err)
-	}
-	return errOut.String(), cmd.ProcessState.ExitCode()
+	_, stderr, code = runMainOut(t, cfgPath, env, args...)
+	return stderr, code
 }
 
 // A config that cannot be read is reported with its path and left as it
@@ -93,5 +80,99 @@ func TestADamagedConfigIsReportedAndKept(t *testing.T) {
 	stderr, code = runMain(t, filepath.Join(t.TempDir(), "config.json"), nil, "ls")
 	if code != ops.ExitAuth || !strings.Contains(stderr, "no token") {
 		t.Errorf("no config: exit %d, %q; want the no-token error", code, stderr)
+	}
+}
+
+// runMainOut is runMain that also returns standard output.
+func runMainOut(t *testing.T, cfgPath string, env []string, args ...string) (stdout, stderr string, code int) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, os.Args[0], append([]string{"-test.run=^TestMainProcess$", "--"}, args...)...)
+	cmd.Env = append(os.Environ(),
+		"EVADO_TEST_MAIN=1", "EVADO_CONFIG="+cfgPath,
+		"EVADO_TOKEN=", "EVADO_SERVER=", "EVADO_LOCAL=", "EVADO_JSON=")
+	cmd.Env = append(cmd.Env, env...)
+	var out, errOut bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &out, &errOut
+	err := cmd.Run()
+	var exit *exec.ExitError
+	if err != nil && !errors.As(err, &exit) {
+		t.Fatalf("evado %v: %v", args, err)
+	}
+	return out.String(), errOut.String(), cmd.ProcessState.ExitCode()
+}
+
+// Help is printed on standard output with exit 0, and needs no token, no
+// todos on this computer and no readable config.
+func TestHelpNeedsNoAccount(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	for _, c := range []struct {
+		args []string
+		want string
+	}{
+		{[]string{"help"}, "evado add [-list name]"},
+		{[]string{"help", "add"}, "usage: evado " + addSynopsis},
+		{[]string{"add", "-h"}, "usage: evado " + addSynopsis},
+		{[]string{"add", "--help"}, "-notes string"},
+		{[]string{"edit", "3fa9", "-help"}, "usage: evado " + editSynopsis},
+		{[]string{"steps", "-h"}, "evado steps done|undone"},
+		{[]string{"help", "steps"}, "evado steps done|undone"},
+		{[]string{"steps", "rm", "-h"}, "usage: evado steps rm"},
+		{[]string{"-local", "ls", "-h"}, "-limit"},
+	} {
+		stdout, stderr, code := runMainOut(t, path, nil, c.args...)
+		if code != 0 || !strings.Contains(stdout, c.want) || stderr != "" {
+			t.Errorf("evado %v: exit %d, stdout %q, stderr %q; want %q on stdout and exit 0", c.args, code, stdout, stderr, c.want)
+		}
+	}
+
+	if err := os.WriteFile(path, []byte(`{"token": `), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if stdout, _, code := runMainOut(t, path, nil, "ls", "-h"); code != 0 || !strings.Contains(stdout, "usage: evado ls") {
+		t.Errorf("with a damaged config: exit %d, %q; want the usage", code, stdout)
+	}
+}
+
+// Every command answers -h with its own usage.
+func TestEveryCommandHasHelp(t *testing.T) {
+	for _, name := range commandNames {
+		if text, ok := commandHelp([]string{name, "-h"}); !ok || !strings.HasPrefix(text, "usage: evado ") || !strings.Contains(text, "-json") {
+			t.Errorf("evado %s -h printed %q; want its usage and flags", name, text)
+		}
+	}
+}
+
+// A -h that is another flag's value, or comes after --, is text for the
+// todo and not a request for help.
+func TestHelpIsNotReadFromAFlagsValue(t *testing.T) {
+	for _, args := range [][]string{
+		{"add", "-notes", "-h", "Buy milk"},
+		{"add", "--", "-h"},
+		{"add", "Buy milk"},
+	} {
+		if text, ok := commandHelp(args); ok {
+			t.Errorf("commandHelp(%v) = %q; want no help", args, text)
+		}
+	}
+}
+
+// A word that is not a command is a usage error, exit 2, printed as JSON
+// when the environment asks for that.
+func TestAnUnknownCommandIsAUsageError(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	for _, args := range [][]string{{"frobnicate"}, {"help", "frobnicate"}} {
+		_, stderr, code := runMainOut(t, path, nil, args...)
+		if code != ops.ExitUsage || !strings.Contains(stderr, `unknown command "frobnicate"`) || !strings.Contains(stderr, "evado help") {
+			t.Errorf("evado %v: exit %d, %q; want exit 2 naming the command", args, code, stderr)
+		}
+	}
+	_, stderr, code := runMainOut(t, path, []string{"EVADO_JSON=1"}, "frobnicate")
+	var out struct {
+		Error ops.Info `json:"error"`
+	}
+	if err := json.Unmarshal([]byte(stderr), &out); err != nil || code != ops.ExitUsage || out.Error.Code != "usage" || out.Error.ExitCode != ops.ExitUsage {
+		t.Errorf("EVADO_JSON=1: exit %d, %q (%v); want a JSON usage error", code, stderr, err)
 	}
 }

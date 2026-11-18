@@ -52,6 +52,19 @@ func main() {
 		return
 	}
 
+	// Help is answered before the config is read or a token looked for, so
+	// it works on a machine that has neither.
+	if flag.Arg(0) == "help" {
+		help(flag.Args()[1:])
+		return
+	}
+	if isCommand(flag.Args()) {
+		if text, ok := commandHelp(flag.Args()); ok {
+			fmt.Print(text)
+			return
+		}
+	}
+
 	var cfg config.Config
 	cleanupDemo := func() {}
 	if *demo {
@@ -136,7 +149,7 @@ func main() {
 		return
 	}
 	if flag.NArg() > 0 {
-		fatal(fmt.Errorf("unknown command %q (commands: %s)", flag.Arg(0), strings.Join(commandNames, ", ")))
+		exitWith(unknownCommand(flag.Arg(0)), wantsJSON(nil, os.Getenv("EVADO_JSON")))
 	}
 
 	// Per-run display options. They are not written to the config file:
@@ -260,8 +273,29 @@ func exitWith(err error, jsonOut bool) {
 	os.Exit(info.ExitCode)
 }
 
-func usage() {
-	fmt.Fprint(os.Stderr, `evado: terminal client for the Evado todo API
+// help answers "evado help" with the usage, and "evado help <command>" with
+// what that command's -h prints, on standard output, since it was asked for.
+func help(args []string) {
+	if len(args) == 0 {
+		printUsage(os.Stdout)
+		return
+	}
+	text, ok := commandHelp([]string{args[0], "-h"})
+	if !ok {
+		exitWith(unknownCommand(args[0]), wantsJSON(nil, os.Getenv("EVADO_JSON")))
+	}
+	fmt.Print(text)
+}
+
+// unknownCommand is a usage error, exit 2, like any other bad argument.
+func unknownCommand(name string) error {
+	return &usageErr{fmt.Sprintf("unknown command %q (commands: %s; evado help lists them in full)", name, strings.Join(commandNames, ", "))}
+}
+
+func usage() { printUsage(os.Stderr) }
+
+func printUsage(w io.Writer) {
+	_, _ = fmt.Fprint(w, `evado: terminal client for the Evado todo API
 
 usage:
   evado                 start the TUI with the saved token
@@ -270,6 +304,7 @@ usage:
   evado -check          verify the saved token and exit
   evado -version        print the version
   evado -demo           try sample todos offline; changes discarded on exit
+  evado help [command]  print this, or one command's usage and flags
 
 commands for scripts and agents, which do not start the TUI. Put global flags before the command:
   evado add [-list name] [-notes text] [-id id] <text | ->
@@ -318,10 +353,12 @@ commands for scripts and agents, which do not start the TUI. Put global flags be
   evado import [-dry-run] [-list id] <file | ->
                                    Import an Evado export.
 
-  Every command takes -json (or set EVADO_JSON=1). Ids may be shortened to a
-  unique prefix. Exit codes: 0 ok, 2 usage, 3 auth, 4 not found, 5 rate
-  limited, 6 refused by the server, 7 forbidden, 8 server error, 9 network,
-  10 changes stopped at its page bound (not a failure; see above).
+  Every command takes -json (or set EVADO_JSON=1), and -h for its own usage
+  and flags. Ids may be shortened to a unique prefix. Exit codes: 0 ok,
+  2 usage, 3 auth, 4 not found, 5 rate limited, 6 refused by the server,
+  7 forbidden, 8 server error, 9 network, 10 changes stopped at its page
+  bound or import has more to read (not a failure; run it again as the
+  result says).
   Set EVADO_TOKEN and EVADO_SERVER to use an account without a config file.
 
   evado -local <command> works on the todos kept on this computer instead of
@@ -334,10 +371,11 @@ commands for scripts and agents, which do not start the TUI. Put global flags be
 
 flags:
 `)
+	flag.CommandLine.SetOutput(w)
 	flag.PrintDefaults()
 	path, err := config.Path()
 	if err == nil {
-		fmt.Fprintf(os.Stderr, `
+		_, _ = fmt.Fprintf(w, `
 get a token from Settings, API & apps in your Evado account. It is stored
 in %s with 0600 permissions.
 `, path)
