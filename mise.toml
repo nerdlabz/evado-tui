@@ -45,6 +45,13 @@ run = "go test -race ./..."
 description = "Format check, vet, and lint"
 run = ['test -z "$(gofumpt -l .)"', "go vet ./...", "golangci-lint run"]
 
+# The README's picture. vhs is not pinned here: it needs ttyd and ffmpeg
+# beside it, which `brew install vhs` brings.
+[tasks.screenshot]
+description = "Remake the README screenshot from evado -demo (needs vhs)"
+depends = ["build"]
+run = 'PATH="$PWD/dist:$PATH" vhs assets/screenshot.tape'
+
 # Which runners CI and releases use. See "Runners" in docs/releasing.md.
 [tasks."ci:runners"]
 description = "Show which runners CI uses"

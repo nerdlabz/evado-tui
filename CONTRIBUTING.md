@@ -20,8 +20,9 @@ mise run build      # dist/evado
 
 You don't need an Evado account to work on the client. `evado -demo` runs on
 sample todos, `evado -local` works on a file on your computer, and
-`cmd/fakeserver` stands in for the service. The README's Development section
-shows how to run against it, and lays out where the code lives.
+`cmd/fakeserver` stands in for the service.
+[docs/development.md](docs/development.md) shows how to run against it, and
+lays out where the code lives.
 [AGENTS.md](AGENTS.md) documents every CLI command, flag and exit code.
 
 ## Making a change
@@ -32,8 +33,10 @@ shows how to run against it, and lays out where the code lives.
   against a fake API, so most behaviour can be tested without a terminal.
 - Keep formatting to `gofumpt`. Comments say why, not what, and match the
   surrounding code.
-- If a flag, command, key or output changes, update the README and AGENTS.md
-  in the same pull request.
+- If a flag, command, key or output changes, update the docs in the same
+  pull request: `docs/using.md` for keys and behaviour, `docs/configuration.md`
+  for flags and settings, AGENTS.md for the command line, and the README only
+  if it changes what a newcomer does first.
 - Keep a pull request to one change. Small ones are reviewed sooner.
 
 Pull requests are squash-merged, and the PR title and description become the

@@ -8,7 +8,7 @@
 
 - [ ] `mise run check` and `mise run test` pass
 - [ ] Tests cover the change, or it only touches docs
-- [ ] README and AGENTS.md are updated if a command, flag, key or output changed
+- [ ] The docs (README, `docs/`, AGENTS.md) are updated if a command, flag, key or output changed
 
 ## Tools used (optional)
 
