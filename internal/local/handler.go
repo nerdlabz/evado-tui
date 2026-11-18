@@ -409,21 +409,29 @@ func (b *Backend) nameSelf() {
 
 func (b *Backend) parse(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Title string `json:"title"`
-		Smart *bool  `json:"smart,omitempty"`
+		Title      string `json:"title"`
+		Smart      *bool  `json:"smart,omitempty"`
+		TimePassed string `json:"timePassed,omitempty"`
 	}
 	_ = json.NewDecoder(r.Body).Decode(&body)
+	if !passedChoice(body.TimePassed) {
+		fail(w, http.StatusBadRequest, "invalid_request", "timePassed: expected kept or moved")
+		return
+	}
 	// The preview reads the text the way capturing it would.
-	read := b.readings(r.Context(), []string{body.Title}, body.Smart)
+	read := b.readings(r.Context(), []string{body.Title}, body.Smart, body.TimePassed)
 	b.locked(w, func() (int, any) {
-		p := b.reading(body.Title, read)
-		var rule any
+		p := b.reading(body.Title, read, body.TimePassed)
+		var rule, passed any
 		if p.Recurrence != "" {
 			rule = p.Recurrence
 		}
+		if p.TimePassed != "" {
+			passed = p.TimePassed
+		}
 		return http.StatusOK, map[string]any{"parsed": map[string]any{
 			"title": p.Title, "doAt": p.DoAt, "hasTime": p.HasTime, "recurrenceRule": rule,
-			"assumedTime": p.Assumed, "keptAsName": p.KeptAsName,
+			"assumedTime": p.Assumed, "keptAsName": p.KeptAsName, "timePassed": passed,
 		}}
 	})
 }
@@ -741,6 +749,10 @@ func (b *Backend) createTodos(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, "invalid_request", "notes are at most 10000 characters")
 		return
 	}
+	if !passedChoice(n.TimePassed) {
+		fail(w, http.StatusBadRequest, "invalid_request", "timePassed: expected kept or moved")
+		return
+	}
 	// Capture may hold several todos, one per line. The service is asked
 	// how it reads them before the lock is taken, since that waits on it.
 	lines := captureLines(n)
@@ -754,7 +766,7 @@ func (b *Backend) createTodos(w http.ResponseWriter, r *http.Request) {
 	}
 	var read map[string]Parsed
 	if n.Parse == nil || *n.Parse {
-		read = b.readings(r.Context(), lines, n.Smart)
+		read = b.readings(r.Context(), lines, n.Smart, n.TimePassed)
 	}
 	b.change(w, func() (int, any) {
 		listID := n.ListID
@@ -789,7 +801,7 @@ func (b *Backend) createTodos(w http.ResponseWriter, r *http.Request) {
 		for _, line := range lines {
 			parsed := Parsed{Title: line}
 			if n.Parse == nil || *n.Parse {
-				parsed = b.reading(line, read)
+				parsed = b.reading(line, read, n.TimePassed)
 			}
 			t, p := b.newTodo(n, line, listID, parsed)
 			if p != nil {
@@ -851,6 +863,10 @@ func (b *Backend) newTodo(n api.NewTodo, line, listID string, parsed Parsed) (To
 		return t, p
 	}
 	t.DueAt = due
+	// A time read from the text that had already passed, kept on today
+	// because the words said today, gets no reminder: one would go off at
+	// once. A reminder the request gives is still kept.
+	passedToday := false
 	switch {
 	case do != nil:
 		b.setDo(&t, do, true)
@@ -863,6 +879,7 @@ func (b *Backend) newTodo(n api.NewTodo, line, listID string, parsed Parsed) (To
 		b.setDo(&t, at, false)
 	case parsed.DoAt != nil && parsed.HasTime:
 		b.setDo(&t, parsed.DoAt, true)
+		passedToday = parsed.TimePassed == Kept
 	case parsed.DoAt != nil:
 		at, _ := b.morning(parsed.DoAt.In(b.loc()).Format("2006-01-02"))
 		b.setDo(&t, at, false)
@@ -872,7 +889,7 @@ func (b *Backend) newTodo(n api.NewTodo, line, listID string, parsed Parsed) (To
 		t.Title = line
 	}
 	t.RemindAt = remind
-	if remind == nil {
+	if remind == nil && !passedToday {
 		t.RemindAt = b.defaultReminder(&t)
 	}
 	if n.IsCompleted != nil && *n.IsCompleted {

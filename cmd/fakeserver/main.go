@@ -550,13 +550,17 @@ func newServer(s *store, token string) http.Handler {
 	})
 
 	mux.HandleFunc(prefix+"/parse", func(w http.ResponseWriter, r *http.Request) {
-		var body struct{ Title string }
+		var body struct{ Title, TimePassed string }
 		_ = json.NewDecoder(r.Body).Decode(&body)
-		p := local.Parse(body.Title, time.Local, time.Now())
+		p := local.ParseWith(body.Title, time.Local, time.Now(), local.Options{TimePassed: body.TimePassed})
+		var passed any
+		if p.TimePassed != "" {
+			passed = p.TimePassed
+		}
 		s.write(w, map[string]any{
 			"parsed": map[string]any{
 				"title": p.Title, "doAt": p.DoAt, "hasTime": p.HasTime,
-				"recurrenceRule": p.Recurrence, "assumedTime": p.Assumed,
+				"recurrenceRule": p.Recurrence, "assumedTime": p.Assumed, "timePassed": passed,
 			},
 		})
 	})

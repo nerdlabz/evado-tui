@@ -42,7 +42,7 @@ func captureLines(n api.NewTodo) []string {
 // asked and capture stays instant.
 //
 // It must be called without the lock held: it waits on the network.
-func (b *Backend) readings(ctx context.Context, lines []string, smart *bool) map[string]Parsed {
+func (b *Backend) readings(ctx context.Context, lines []string, smart *bool, timePassed string) map[string]Parsed {
 	b.mu.Lock()
 	remote, ask := b.remote, b.signedIn() && !Offline(b.lastErr)
 	b.mu.Unlock()
@@ -65,7 +65,7 @@ func (b *Backend) readings(ctx context.Context, lines []string, smart *bool) map
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if p, err := remote.ParseWithSmart(ctx, line, smart); err == nil {
+			if p, err := remote.ParseChoosing(ctx, line, smart, timePassed); err == nil {
 				mu.Lock()
 				out[line] = fromService(p, line)
 				mu.Unlock()
@@ -80,6 +80,9 @@ func (b *Backend) readings(ctx context.Context, lines []string, smart *bool) map
 // reader here gives.
 func fromService(p api.ParsePreview, line string) Parsed {
 	out := Parsed{Title: strings.TrimSpace(p.Title), DoAt: p.DoAt, HasTime: p.HasTime && p.DoAt != nil, Assumed: p.AssumedTime, KeptAsName: p.KeptAsName}
+	if passed := p.Passed(); passed == Kept || passed == Moved {
+		out.TimePassed = passed
+	}
 	if out.Title == "" {
 		out.Title = line
 	}
@@ -90,10 +93,15 @@ func fromService(p api.ParsePreview, line string) Parsed {
 }
 
 // reading is how a line is read: the service's reading when there is one,
-// otherwise this reader's. The caller holds the lock.
-func (b *Backend) reading(line string, fromService map[string]Parsed) Parsed {
+// otherwise this reader's, with the reading of a passed time that was asked
+// for, if one was. The caller holds the lock.
+func (b *Backend) reading(line string, fromService map[string]Parsed, timePassed string) Parsed {
 	if p, ok := fromService[line]; ok {
 		return p
 	}
-	return Parse(line, b.loc(), b.now())
+	return ParseWith(line, b.loc(), b.now(), Options{TimePassed: timePassed, DateOrder: b.st.User.DateOrder})
 }
+
+// passedChoice is whether a request's timePassed is one the service takes:
+// kept, moved, or left out.
+func passedChoice(s string) bool { return s == "" || s == Kept || s == Moved }

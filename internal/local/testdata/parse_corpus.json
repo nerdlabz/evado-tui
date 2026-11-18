@@ -1,7 +1,9 @@
 {
- "about": "Phrases read by the Evado service's parser (POST /parse; src/lib/parse.ts), for an account in UTC, at the instant in `now` (Thursday 1 October 2026) unless a phrase gives its own. This is the service's own docs/parser-corpus.json: its `service` readings are copied from it unchanged, and `assumed` is the half of the day (am or pm) it guessed for a time typed without am/pm. TestParseCorpus reads each phrase with local.Parse as of the same instant and holds it to `service`. A phrase with a `local` reading is one this reader reads differently on purpose, and `why` says so. To refresh, copy docs/parser-corpus.json over this file, put each `local` and `why` back on its phrase, and drop the ones the service now reads the way this reader does; the diff against the service's copy then shows only this note, `local` and `why`. Follow-up readings were recorded from service main on 2026-10-03 for issue #64, including boundary clocks and calendar month ends.",
+ "about": "Phrases read by the Evado service's parser (POST /parse; src/lib/parse.ts) for an account in UTC that reads numeric dates month first (`dateOrder`: `mdy`, so 3/4 is March 4) unless a phrase gives its own `dateOrder` (`dmy` makes 3/4 3 April; issue #376), at the instant in `now` (Thursday 1 October 2026) unless a phrase gives its own. `service` is how the service read it: the title with the date words removed, the day (YYYY-MM-DD), the time of day (HH:MM, empty when the todo has no time), the recurrence rule, `assumed` (am or pm) when a time was typed without am/pm and one reading was assumed, and `passed` when the time had already passed today: `kept` when the phrase said today, tonight, or this morning, afternoon or evening, so the todo stays on today at that time with no reminder (the web offers \"Tomorrow instead\"), `moved` when no day was said and it went to tomorrow at that time (the web offers \"Keep today\"), and empty otherwise, including for repeats. tests/parser-corpus.test.ts keeps this file equal to what the parser does; run `UPDATE_CORPUS=1 npx vitest run tests/parser-corpus.test.ts` after a parser change and commit the diff. Clients with their own parser can test themselves against it. A client that reads a phrase differently on purpose can say so and why in its own copy of the file. Date-only weekdays naming today use the account local date throughout that day; explicit next weekdays mean the following week. A smart reading may be recorded in an optional smart field for review, but this file only asserts the deterministic service reading.",
+ "aboutThisCopy": "This is the service's docs/parser-corpus.json as of 2026-11-18, with its `about` and `service` readings unchanged. TestParseCorpus reads each phrase with local.ParseWith as of the same instant, with the same `dateOrder`, and holds it to `service`. A phrase with a `local` reading is one this reader reads differently on purpose, and `why` says so. The last 9 phrases are not in the service's file: they were recorded from the service by hand on 2026-10-03 for issue #64 (boundary clocks and calendar month ends) and are kept here. To refresh, copy docs/parser-corpus.json over this file, put this note, each `local` and `why`, and those last phrases back, and drop any `local` the service now reads the same way; the diff against the service's copy then shows only those.",
  "now": "2026-10-01T05:53:54Z",
  "tz": "UTC",
+ "dateOrder": "mdy",
  "phrases": [
   {
    "in": "Buy milk",
@@ -10,7 +12,8 @@
     "day": "",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -20,7 +23,8 @@
     "day": "2026-10-02",
     "time": "17:00",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -30,7 +34,8 @@
     "day": "2026-10-02",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -40,7 +45,8 @@
     "day": "2026-10-02",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -50,7 +56,8 @@
     "day": "2026-10-02",
     "time": "09:00",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -60,7 +67,8 @@
     "day": "2026-10-01",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -70,7 +78,8 @@
     "day": "2026-10-01",
     "time": "09:30",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -80,7 +89,8 @@
     "day": "2026-10-01",
     "time": "12:00",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -90,7 +100,8 @@
     "day": "2026-10-01",
     "time": "17:30",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -100,7 +111,8 @@
     "day": "2026-10-15",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -110,7 +122,8 @@
     "day": "2026-10-03",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -120,7 +133,8 @@
     "day": "2026-10-03",
     "time": "14:00",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -130,7 +144,8 @@
     "day": "2027-04-15",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -140,7 +155,8 @@
     "day": "2026-11-05",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -150,7 +166,8 @@
     "day": "2026-10-08",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -160,7 +177,8 @@
     "day": "2026-10-07",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -170,7 +188,8 @@
     "day": "2026-10-01",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -180,7 +199,8 @@
     "day": "2026-10-09",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -190,7 +210,8 @@
     "day": "2026-10-02",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -200,7 +221,8 @@
     "day": "",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -210,7 +232,8 @@
     "day": "2026-10-02",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -220,7 +243,8 @@
     "day": "2026-10-03",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -230,7 +254,8 @@
     "day": "2026-10-03",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -240,7 +265,8 @@
     "day": "",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -250,7 +276,8 @@
     "day": "",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -260,7 +287,8 @@
     "day": "2026-10-02",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -270,7 +298,8 @@
     "day": "2026-10-02",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -280,7 +309,8 @@
     "day": "2026-10-02",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -290,7 +320,8 @@
     "day": "2026-10-02",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -300,7 +331,8 @@
     "day": "2026-10-01",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -310,7 +342,8 @@
     "day": "2026-10-01",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -320,7 +353,8 @@
     "day": "2026-10-01",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -330,7 +364,8 @@
     "day": "2026-10-01",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -340,7 +375,8 @@
     "day": "2026-10-02",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -350,7 +386,8 @@
     "day": "2026-10-02",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -360,7 +397,8 @@
     "day": "2026-10-03",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -370,7 +408,8 @@
     "day": "2026-10-10",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -380,7 +419,8 @@
     "day": "2026-10-03",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -390,7 +430,8 @@
     "day": "2026-10-03",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -400,7 +441,8 @@
     "day": "2026-10-01",
     "time": "17:00",
     "rule": "",
-    "assumed": "pm"
+    "assumed": "pm",
+    "passed": ""
    }
   },
   {
@@ -410,7 +452,8 @@
     "day": "2026-10-01",
     "time": "15:00",
     "rule": "",
-    "assumed": "pm"
+    "assumed": "pm",
+    "passed": ""
    }
   },
   {
@@ -420,7 +463,8 @@
     "day": "2026-10-02",
     "time": "17:00",
     "rule": "",
-    "assumed": "pm"
+    "assumed": "pm",
+    "passed": ""
    }
   },
   {
@@ -430,7 +474,8 @@
     "day": "2026-10-02",
     "time": "17:00",
     "rule": "",
-    "assumed": "pm"
+    "assumed": "pm",
+    "passed": ""
    }
   },
   {
@@ -440,7 +485,8 @@
     "day": "2026-10-01",
     "time": "17:00",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -450,7 +496,8 @@
     "day": "2026-10-01",
     "time": "17:00",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -460,7 +507,8 @@
     "day": "2026-10-01",
     "time": "17:30",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -470,7 +518,8 @@
     "day": "2026-10-02",
     "time": "17:00",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -480,7 +529,8 @@
     "day": "2026-10-01",
     "time": "17:00",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -490,7 +540,8 @@
     "day": "2026-10-01",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -500,7 +551,8 @@
     "day": "2026-11-01",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -510,7 +562,8 @@
     "day": "2026-11-01",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -520,7 +573,8 @@
     "day": "2026-10-15",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -530,7 +584,8 @@
     "day": "2026-11-01",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -540,7 +595,8 @@
     "day": "2026-11-01",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -550,7 +606,8 @@
     "day": "2026-10-03",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -560,7 +617,8 @@
     "day": "2026-10-03",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -570,7 +628,8 @@
     "day": "2026-10-03",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -580,7 +639,8 @@
     "day": "2026-10-22",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -590,7 +650,8 @@
     "day": "2026-10-08",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -600,7 +661,8 @@
     "day": "2026-12-01",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -611,7 +673,8 @@
     "day": "2026-10-01",
     "time": "08:58",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -622,7 +685,8 @@
     "day": "2026-10-01",
     "time": "06:28",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -633,7 +697,8 @@
     "day": "2026-10-01",
     "time": "06:58",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -643,7 +708,8 @@
     "day": "2026-11-01",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -653,7 +719,8 @@
     "day": "2027-10-01",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -663,7 +730,8 @@
     "day": "2026-10-04",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -673,7 +741,164 @@
     "day": "2026-10-08",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Pay phone bill 3 weeks from today",
+   "service": {
+    "title": "Pay phone bill",
+    "day": "2026-10-22",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Pay phone bill three weeks from today",
+   "service": {
+    "title": "Pay phone bill",
+    "day": "2026-10-22",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Pay phone bill in three weeks",
+   "service": {
+    "title": "Pay phone bill",
+    "day": "2026-10-22",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Pay phone bill Wednesday",
+   "service": {
+    "title": "Pay phone bill",
+    "day": "2026-10-07",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Pay phone bill 3 weeks from Wednesday",
+   "service": {
+    "title": "Pay phone bill",
+    "day": "2026-10-28",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Pay phone bill three weeks from Wednesday",
+   "service": {
+    "title": "Pay phone bill",
+    "day": "2026-10-28",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Pay phone bill a week from Wednesday",
+   "service": {
+    "title": "Pay phone bill",
+    "day": "2026-10-14",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Pay phone bill a week from Friday",
+   "service": {
+    "title": "Pay phone bill",
+    "day": "2026-10-09",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Pay phone bill a day from Monday",
+   "service": {
+    "title": "Pay phone bill",
+    "day": "2026-10-06",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Pay phone bill 2 days from Monday",
+   "service": {
+    "title": "Pay phone bill",
+    "day": "2026-10-07",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Pay phone bill from Wednesday",
+   "service": {
+    "title": "Pay phone bill from",
+    "day": "2026-10-07",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Pay phone bill Wednesday",
+   "now": "2026-10-07T12:00:00Z",
+   "service": {
+    "title": "Pay phone bill",
+    "day": "2026-10-07",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Pay phone bill a week from Wednesday",
+   "now": "2026-10-07T12:00:00Z",
+   "service": {
+    "title": "Pay phone bill",
+    "day": "2026-10-14",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Pick up the package from the shop Wednesday",
+   "service": {
+    "title": "Pick up the package from the shop",
+    "day": "2026-10-07",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -683,7 +908,8 @@
     "day": "2026-10-09",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -693,7 +919,8 @@
     "day": "2026-10-31",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -703,7 +930,8 @@
     "day": "2026-10-31",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -713,7 +941,8 @@
     "day": "",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -723,7 +952,8 @@
     "day": "",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -733,7 +963,8 @@
     "day": "",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -743,7 +974,8 @@
     "day": "",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -753,7 +985,8 @@
     "day": "2026-10-15",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -763,7 +996,8 @@
     "day": "2026-10-15",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -773,7 +1007,8 @@
     "day": "2026-10-15",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -783,7 +1018,8 @@
     "day": "2026-10-15",
     "time": "14:00",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -793,7 +1029,8 @@
     "day": "",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -803,7 +1040,8 @@
     "day": "2026-10-02",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -813,7 +1051,8 @@
     "day": "2026-10-02",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -823,7 +1062,8 @@
     "day": "2026-10-09",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -833,7 +1073,8 @@
     "day": "2026-10-06",
     "time": "09:00",
     "rule": "",
-    "assumed": "am"
+    "assumed": "am",
+    "passed": ""
    }
   },
   {
@@ -843,7 +1084,8 @@
     "day": "2026-10-05",
     "time": "09:00",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -853,7 +1095,8 @@
     "day": "2026-10-05",
     "time": "09:00",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -863,7 +1106,8 @@
     "day": "2026-10-01",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -873,7 +1117,8 @@
     "day": "2026-10-03",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -883,7 +1128,8 @@
     "day": "2026-10-07",
     "time": "",
     "rule": "1:week:3",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -893,7 +1139,8 @@
     "day": "2026-11-01",
     "time": "",
     "rule": "1:month",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -903,7 +1150,8 @@
     "day": "2026-10-02",
     "time": "",
     "rule": "1:day",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -913,7 +1161,8 @@
     "day": "2026-10-15",
     "time": "",
     "rule": "2:week",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -923,7 +1172,8 @@
     "day": "2026-10-05",
     "time": "09:00",
     "rule": "1:week:1",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -933,26 +1183,20 @@
     "day": "",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
    "in": "Talk to march team",
    "service": {
-    "title": "Talk to team",
-    "day": "2027-03-01",
-    "time": "",
-    "rule": "",
-    "assumed": ""
-   },
-   "local": {
     "title": "Talk to march team",
     "day": "",
     "time": "",
     "rule": "",
-    "assumed": ""
-   },
-   "why": "A month name on its own is not claimed: it is too often a word (march, may). The New todo form says when such a word was not read."
+    "assumed": "",
+    "passed": ""
+   }
   },
   {
    "in": "Sun cream",
@@ -961,7 +1205,8 @@
     "day": "2026-10-04",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -971,7 +1216,8 @@
     "day": "2026-10-07",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -981,7 +1227,8 @@
     "day": "",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -991,14 +1238,16 @@
     "day": "2026-10-02",
     "time": "05:53",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    },
    "local": {
     "title": "Watch 24 hours",
     "day": "",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    },
    "why": "A length of time without in is not read as a date: it is more often part of the title."
   },
@@ -1009,7 +1258,8 @@
     "day": "",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -1019,7 +1269,8 @@
     "day": "",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -1029,7 +1280,8 @@
     "day": "2026-10-01",
     "time": "15:30",
     "rule": "",
-    "assumed": "pm"
+    "assumed": "pm",
+    "passed": ""
    }
   },
   {
@@ -1039,7 +1291,8 @@
     "day": "2026-10-01",
     "time": "15:30",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -1049,7 +1302,8 @@
     "day": "2026-10-02",
     "time": "12:00",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -1059,7 +1313,8 @@
     "day": "2026-10-02",
     "time": "00:00",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -1069,7 +1324,8 @@
     "day": "2026-10-01",
     "time": "12:00",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -1079,44 +1335,31 @@
     "day": "",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
    "in": "Plan october",
    "service": {
-    "title": "Plan",
-    "day": "2026-10-01",
-    "time": "",
-    "rule": "",
-    "assumed": ""
-   },
-   "local": {
     "title": "Plan october",
     "day": "",
     "time": "",
     "rule": "",
-    "assumed": ""
-   },
-   "why": "A month name on its own is not claimed: it is too often a word (march, may). The New todo form says when such a word was not read."
+    "assumed": "",
+    "passed": ""
+   }
   },
   {
    "in": "Plan in october",
    "service": {
-    "title": "Plan in",
+    "title": "Plan",
     "day": "2026-10-01",
     "time": "",
     "rule": "",
-    "assumed": ""
-   },
-   "local": {
-    "title": "Plan in october",
-    "day": "",
-    "time": "",
-    "rule": "",
-    "assumed": ""
-   },
-   "why": "A month name on its own is not claimed: it is too often a word (march, may). The New todo form says when such a word was not read."
+    "assumed": "",
+    "passed": ""
+   }
   },
   {
    "in": "Plan next october",
@@ -1125,14 +1368,16 @@
     "day": "2026-10-01",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    },
    "local": {
     "title": "Plan next october",
     "day": "",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    },
    "why": "A month name on its own is not claimed: it is too often a word (march, may). The New todo form says when such a word was not read. The service reads next october as this one."
   },
@@ -1143,7 +1388,8 @@
     "day": "2027-03-03",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -1153,7 +1399,8 @@
     "day": "2027-09-30",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -1163,7 +1410,8 @@
     "day": "2026-11-30",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -1173,7 +1421,8 @@
     "day": "2027-12-31",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -1183,7 +1432,8 @@
     "day": "",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -1193,7 +1443,8 @@
     "day": "2026-10-31",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -1203,7 +1454,8 @@
     "day": "2026-10-02",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -1213,7 +1465,8 @@
     "day": "",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -1223,7 +1476,8 @@
     "day": "",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -1233,7 +1487,8 @@
     "day": "2026-10-15",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -1243,7 +1498,8 @@
     "day": "2026-10-05",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -1253,7 +1509,8 @@
     "day": "2026-10-12",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -1263,7 +1520,8 @@
     "day": "2026-10-15",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -1273,7 +1531,8 @@
     "day": "2026-10-03",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -1283,37 +1542,41 @@
     "day": "2026-10-01",
     "time": "09:00",
     "rule": "2:week",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
    "in": "Visit Tomorrow Land at Disney World",
    "service": {
-    "title": "Visit Land at Disney World",
-    "day": "2026-10-02",
+    "title": "Visit Tomorrow Land at Disney World",
+    "day": "",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
    "in": "Friday Night Lights",
    "service": {
-    "title": "Lights",
-    "day": "2026-10-02",
+    "title": "Friday Night Lights",
+    "day": "",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
    "in": "Mon Oncle",
    "service": {
-    "title": "Oncle",
-    "day": "2026-10-05",
+    "title": "Mon Oncle",
+    "day": "",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -1323,26 +1586,20 @@
     "day": "2026-10-03",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
    "in": "March of the Penguins",
    "service": {
-    "title": "the Penguins",
-    "day": "2027-03-01",
-    "time": "",
-    "rule": "",
-    "assumed": ""
-   },
-   "local": {
     "title": "March of the Penguins",
     "day": "",
     "time": "",
     "rule": "",
-    "assumed": ""
-   },
-   "why": "A month name on its own is not claimed: it is too often a word (march, may). The New todo form says when such a word was not read."
+    "assumed": "",
+    "passed": ""
+   }
   },
   {
    "in": "Wake up at 8",
@@ -1352,7 +1609,8 @@
     "day": "2026-10-02",
     "time": "08:00",
     "rule": "",
-    "assumed": "am"
+    "assumed": "am",
+    "passed": "moved"
    }
   },
   {
@@ -1363,7 +1621,8 @@
     "day": "2026-10-01",
     "time": "15:00",
     "rule": "",
-    "assumed": "pm"
+    "assumed": "pm",
+    "passed": ""
    }
   },
   {
@@ -1374,7 +1633,8 @@
     "day": "2026-10-02",
     "time": "09:00",
     "rule": "",
-    "assumed": "am"
+    "assumed": "am",
+    "passed": "moved"
    }
   },
   {
@@ -1385,7 +1645,8 @@
     "day": "2026-10-02",
     "time": "09:00",
     "rule": "",
-    "assumed": "am"
+    "assumed": "am",
+    "passed": "moved"
    }
   },
   {
@@ -1396,7 +1657,8 @@
     "day": "2026-10-02",
     "time": "07:00",
     "rule": "",
-    "assumed": "am"
+    "assumed": "am",
+    "passed": "moved"
    }
   },
   {
@@ -1407,7 +1669,8 @@
     "day": "2026-10-02",
     "time": "15:00",
     "rule": "",
-    "assumed": "pm"
+    "assumed": "pm",
+    "passed": "moved"
    }
   },
   {
@@ -1418,7 +1681,8 @@
     "day": "2026-10-01",
     "time": "17:00",
     "rule": "",
-    "assumed": "pm"
+    "assumed": "pm",
+    "passed": ""
    }
   },
   {
@@ -1429,7 +1693,8 @@
     "day": "2026-10-01",
     "time": "20:00",
     "rule": "",
-    "assumed": "pm"
+    "assumed": "pm",
+    "passed": ""
    }
   },
   {
@@ -1440,7 +1705,8 @@
     "day": "2026-10-01",
     "time": "09:00",
     "rule": "",
-    "assumed": "am"
+    "assumed": "am",
+    "passed": ""
    }
   },
   {
@@ -1451,7 +1717,8 @@
     "day": "2026-10-01",
     "time": "19:00",
     "rule": "",
-    "assumed": "pm"
+    "assumed": "pm",
+    "passed": ""
    }
   },
   {
@@ -1462,7 +1729,8 @@
     "day": "2026-10-02",
     "time": "06:00",
     "rule": "",
-    "assumed": "am"
+    "assumed": "am",
+    "passed": "moved"
    }
   },
   {
@@ -1473,7 +1741,8 @@
     "day": "2026-10-02",
     "time": "11:00",
     "rule": "",
-    "assumed": "am"
+    "assumed": "am",
+    "passed": "moved"
    }
   },
   {
@@ -1484,7 +1753,8 @@
     "day": "2026-10-01",
     "time": "17:00",
     "rule": "",
-    "assumed": "pm"
+    "assumed": "pm",
+    "passed": ""
    }
   },
   {
@@ -1495,7 +1765,8 @@
     "day": "2026-10-02",
     "time": "11:00",
     "rule": "",
-    "assumed": "am"
+    "assumed": "am",
+    "passed": "moved"
    }
   },
   {
@@ -1506,7 +1777,8 @@
     "day": "2026-10-02",
     "time": "11:30",
     "rule": "",
-    "assumed": "am"
+    "assumed": "am",
+    "passed": "moved"
    }
   },
   {
@@ -1517,7 +1789,8 @@
     "day": "2026-10-01",
     "time": "17:30",
     "rule": "",
-    "assumed": "pm"
+    "assumed": "pm",
+    "passed": ""
    }
   },
   {
@@ -1528,7 +1801,8 @@
     "day": "2026-10-01",
     "time": "17:45",
     "rule": "",
-    "assumed": "pm"
+    "assumed": "pm",
+    "passed": ""
    }
   },
   {
@@ -1539,7 +1813,8 @@
     "day": "2026-10-01",
     "time": "17:00",
     "rule": "",
-    "assumed": "pm"
+    "assumed": "pm",
+    "passed": ""
    }
   },
   {
@@ -1550,7 +1825,8 @@
     "day": "2026-10-02",
     "time": "08:00",
     "rule": "",
-    "assumed": "am"
+    "assumed": "am",
+    "passed": "moved"
    }
   },
   {
@@ -1561,7 +1837,8 @@
     "day": "2026-10-02",
     "time": "15:00",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": "moved"
    }
   },
   {
@@ -1572,7 +1849,8 @@
     "day": "2026-10-02",
     "time": "15:00",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": "moved"
    }
   },
   {
@@ -1583,7 +1861,8 @@
     "day": "2026-10-02",
     "time": "12:00",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": "moved"
    }
   },
   {
@@ -1594,7 +1873,8 @@
     "day": "2026-10-02",
     "time": "09:00",
     "rule": "",
-    "assumed": "am"
+    "assumed": "am",
+    "passed": ""
    }
   },
   {
@@ -1605,7 +1885,8 @@
     "day": "2026-10-02",
     "time": "08:00",
     "rule": "",
-    "assumed": "am"
+    "assumed": "am",
+    "passed": ""
    }
   },
   {
@@ -1616,7 +1897,8 @@
     "day": "2026-10-03",
     "time": "18:00",
     "rule": "",
-    "assumed": "pm"
+    "assumed": "pm",
+    "passed": ""
    }
   },
   {
@@ -1627,7 +1909,8 @@
     "day": "2026-10-02",
     "time": "07:00",
     "rule": "",
-    "assumed": "am"
+    "assumed": "am",
+    "passed": ""
    }
   },
   {
@@ -1638,7 +1921,8 @@
     "day": "2026-10-02",
     "time": "07:00",
     "rule": "",
-    "assumed": "am"
+    "assumed": "am",
+    "passed": ""
    }
   },
   {
@@ -1649,7 +1933,8 @@
     "day": "2026-10-05",
     "time": "15:00",
     "rule": "1:week:1",
-    "assumed": "pm"
+    "assumed": "pm",
+    "passed": ""
    }
   },
   {
@@ -1660,7 +1945,8 @@
     "day": "2026-10-03",
     "time": "07:00",
     "rule": "",
-    "assumed": "am"
+    "assumed": "am",
+    "passed": ""
    }
   },
   {
@@ -1671,7 +1957,8 @@
     "day": "2026-10-02",
     "time": "08:00",
     "rule": "",
-    "assumed": "am"
+    "assumed": "am",
+    "passed": ""
    }
   },
   {
@@ -1682,7 +1969,8 @@
     "day": "2026-10-02",
     "time": "09:00",
     "rule": "",
-    "assumed": "am"
+    "assumed": "am",
+    "passed": ""
    }
   },
   {
@@ -1693,7 +1981,1248 @@
     "day": "2026-10-01",
     "time": "09:00",
     "rule": "",
-    "assumed": "am"
+    "assumed": "am",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Dentist at 10:45 day after tomorrow",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Dentist",
+    "day": "2026-10-03",
+    "time": "10:45",
+    "rule": "",
+    "assumed": "am",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Dentist at 10 day after tomorrow",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Dentist",
+    "day": "2026-10-03",
+    "time": "10:00",
+    "rule": "",
+    "assumed": "am",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Dentist day after tomorrow at 10:45",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Dentist",
+    "day": "2026-10-03",
+    "time": "10:45",
+    "rule": "",
+    "assumed": "am",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Dentist at 10:45am day after tomorrow",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Dentist",
+    "day": "2026-10-03",
+    "time": "10:45",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Dentist at 10:45 the day after tomorrow",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Dentist",
+    "day": "2026-10-03",
+    "time": "10:45",
+    "rule": "",
+    "assumed": "am",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Dentist at 10:45 tomorrow",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Dentist",
+    "day": "2026-10-02",
+    "time": "10:45",
+    "rule": "",
+    "assumed": "am",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Call tonight at 8",
+   "now": "2026-10-01T15:00:00Z",
+   "service": {
+    "title": "Call",
+    "day": "2026-10-01",
+    "time": "20:00",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Call tonight at 8",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Call",
+    "day": "2026-10-01",
+    "time": "20:00",
+    "rule": "",
+    "assumed": "",
+    "passed": "kept"
+   }
+  },
+  {
+   "in": "Dinner tonight at 7",
+   "now": "2026-10-01T15:00:00Z",
+   "service": {
+    "title": "Dinner",
+    "day": "2026-10-01",
+    "time": "19:00",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Dinner tonight at 7",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Dinner",
+    "day": "2026-10-01",
+    "time": "19:00",
+    "rule": "",
+    "assumed": "",
+    "passed": "kept"
+   }
+  },
+  {
+   "in": "Call this evening at 7",
+   "now": "2026-10-01T15:00:00Z",
+   "service": {
+    "title": "Call",
+    "day": "2026-10-01",
+    "time": "19:00",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Call this evening at 7",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Call",
+    "day": "2026-10-01",
+    "time": "19:00",
+    "rule": "",
+    "assumed": "",
+    "passed": "kept"
+   }
+  },
+  {
+   "in": "Call tomorrow evening at 7",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Call",
+    "day": "2026-10-02",
+    "time": "19:00",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Call tomorrow night at 9",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Call",
+    "day": "2026-10-02",
+    "time": "21:00",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Call friday evening at 7",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Call",
+    "day": "2026-10-02",
+    "time": "19:00",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Call at 8 tonight",
+   "now": "2026-10-01T15:00:00Z",
+   "service": {
+    "title": "Call",
+    "day": "2026-10-01",
+    "time": "20:00",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Call at 8 tonight",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Call",
+    "day": "2026-10-01",
+    "time": "20:00",
+    "rule": "",
+    "assumed": "",
+    "passed": "kept"
+   }
+  },
+  {
+   "in": "Call today at 9",
+   "now": "2026-10-01T10:00:00Z",
+   "service": {
+    "title": "Call",
+    "day": "2026-10-01",
+    "time": "21:00",
+    "rule": "",
+    "assumed": "pm",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Call today at 9",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Call",
+    "day": "2026-10-01",
+    "time": "09:00",
+    "rule": "",
+    "assumed": "am",
+    "passed": "kept"
+   }
+  },
+  {
+   "in": "Call today at 9am",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Call",
+    "day": "2026-10-01",
+    "time": "09:00",
+    "rule": "",
+    "assumed": "",
+    "passed": "kept"
+   }
+  },
+  {
+   "in": "Call in 2 days at midnight",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Call",
+    "day": "2026-10-03",
+    "time": "00:00",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Call in 3 days at midnight",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Call",
+    "day": "2026-10-04",
+    "time": "00:00",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Call tomorrow at midnight",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Call",
+    "day": "2026-10-02",
+    "time": "00:00",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Call friday at midnight",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Call",
+    "day": "2026-10-02",
+    "time": "00:00",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Call a week from today at midnight",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Call",
+    "day": "2026-10-08",
+    "time": "00:00",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Call at midnight",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Call",
+    "day": "2026-10-02",
+    "time": "00:00",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Call in 2 days at noon",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Call",
+    "day": "2026-10-03",
+    "time": "12:00",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "the first of november 7:30",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "the first of november 7:30",
+    "day": "2026-11-01",
+    "time": "07:30",
+    "rule": "",
+    "assumed": "am",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Meeting the first of november at 7:30",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Meeting",
+    "day": "2026-11-01",
+    "time": "07:30",
+    "rule": "",
+    "assumed": "am",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Pay rent on the first of november 7:30",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Pay rent",
+    "day": "2026-11-01",
+    "time": "07:30",
+    "rule": "",
+    "assumed": "am",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Lunch november 1 7:30",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Lunch",
+    "day": "2026-11-01",
+    "time": "07:30",
+    "rule": "",
+    "assumed": "am",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Lunch november 1 at 7:30",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Lunch",
+    "day": "2026-11-01",
+    "time": "07:30",
+    "rule": "",
+    "assumed": "am",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Standup every monday at 3",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Standup",
+    "day": "2026-10-05",
+    "time": "15:00",
+    "rule": "1:week:1",
+    "assumed": "pm",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Standup every thursday at 9",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Standup",
+    "day": "2026-10-08",
+    "time": "09:00",
+    "rule": "1:week:4",
+    "assumed": "am",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Call thursday at 9",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Call",
+    "day": "2026-10-08",
+    "time": "09:00",
+    "rule": "",
+    "assumed": "am",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Call thursday at 9pm",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Call",
+    "day": "2026-10-08",
+    "time": "21:00",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Standup every day at 8",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Standup",
+    "day": "2026-10-02",
+    "time": "08:00",
+    "rule": "1:day",
+    "assumed": "am",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Gym every friday at 6",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Gym",
+    "day": "2026-10-02",
+    "time": "18:00",
+    "rule": "1:week:5",
+    "assumed": "pm",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Call tomorrow at 8",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Call",
+    "day": "2026-10-02",
+    "time": "08:00",
+    "rule": "",
+    "assumed": "am",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Call friday at 9",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Call",
+    "day": "2026-10-02",
+    "time": "09:00",
+    "rule": "",
+    "assumed": "am",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Dentist at 9 next week",
+   "now": "2026-10-01T22:08:00Z",
+   "service": {
+    "title": "Dentist",
+    "day": "2026-10-08",
+    "time": "09:00",
+    "rule": "",
+    "assumed": "am",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Tomorrow visit Tomorrow Land at Disney World",
+   "now": "2026-10-02T22:25:00Z",
+   "service": {
+    "title": "visit Tomorrow Land at Disney World",
+    "day": "2026-10-03",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "On Friday visit Tomorrow Land",
+   "now": "2026-10-02T22:25:00Z",
+   "service": {
+    "title": "visit Tomorrow Land",
+    "day": "2026-10-02",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "8:30 tomorrow morning have coffee with Sam",
+   "now": "2026-10-02T22:25:00Z",
+   "service": {
+    "title": "have coffee with Sam",
+    "day": "2026-10-03",
+    "time": "08:30",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "8:30 have coffee with Sam tomorrow morning",
+   "now": "2026-10-02T22:25:00Z",
+   "service": {
+    "title": "have coffee with Sam",
+    "day": "2026-10-03",
+    "time": "08:30",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Tuesday lunch with June",
+   "now": "2026-10-02T22:25:00Z",
+   "service": {
+    "title": "lunch with June",
+    "day": "2026-10-06",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Meet April at the cafe in April",
+   "now": "2026-10-02T22:25:00Z",
+   "service": {
+    "title": "Meet April at the cafe",
+    "day": "2027-04-01",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Visit Tomorrow Land at Disney World",
+   "now": "2026-10-02T22:25:00Z",
+   "service": {
+    "title": "Visit Tomorrow Land at Disney World",
+    "day": "",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Watch Friday Night Lights",
+   "now": "2026-10-02T22:25:00Z",
+   "service": {
+    "title": "Watch Friday Night Lights",
+    "day": "",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Visit Tomorrow Land tomorrow",
+   "now": "2026-10-02T22:25:00Z",
+   "service": {
+    "title": "Visit Tomorrow Land",
+    "day": "2026-10-03",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Lunch with June on Tuesday",
+   "now": "2026-10-02T22:25:00Z",
+   "service": {
+    "title": "Lunch with June",
+    "day": "2026-10-06",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Friday Night Lights on Friday",
+   "now": "2026-10-02T22:25:00Z",
+   "service": {
+    "title": "Friday Night Lights",
+    "day": "2026-10-02",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Have coffee with Sam tomorrow morning at 8:30",
+   "now": "2026-10-02T22:25:00Z",
+   "service": {
+    "title": "Have coffee with Sam",
+    "day": "2026-10-03",
+    "time": "08:30",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Yoga every friday evening at 7",
+   "now": "2026-10-01T17:00:00Z",
+   "service": {
+    "title": "Yoga",
+    "day": "2026-10-02",
+    "time": "19:00",
+    "rule": "1:week:5",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Yoga every friday night at 9",
+   "now": "2026-10-01T17:00:00Z",
+   "service": {
+    "title": "Yoga",
+    "day": "2026-10-02",
+    "time": "21:00",
+    "rule": "1:week:5",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Yoga every friday morning at 7",
+   "now": "2026-10-01T17:00:00Z",
+   "service": {
+    "title": "Yoga",
+    "day": "2026-10-02",
+    "time": "07:00",
+    "rule": "1:week:5",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Yoga every friday at 7pm",
+   "now": "2026-10-01T17:00:00Z",
+   "service": {
+    "title": "Yoga",
+    "day": "2026-10-02",
+    "time": "19:00",
+    "rule": "1:week:5",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Pick up June at 3",
+   "now": "2026-10-02T02:00:00Z",
+   "service": {
+    "title": "Pick up June",
+    "day": "2026-10-02",
+    "time": "15:00",
+    "rule": "",
+    "assumed": "pm",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Pick up April at 3",
+   "now": "2026-10-02T02:00:00Z",
+   "service": {
+    "title": "Pick up April",
+    "day": "2026-10-02",
+    "time": "15:00",
+    "rule": "",
+    "assumed": "pm",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Pick up May at 3",
+   "now": "2026-10-02T02:00:00Z",
+   "service": {
+    "title": "Pick up May",
+    "day": "2026-10-02",
+    "time": "15:00",
+    "rule": "",
+    "assumed": "pm",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Pick up August at 3",
+   "now": "2026-10-02T02:00:00Z",
+   "service": {
+    "title": "Pick up August",
+    "day": "2026-10-02",
+    "time": "15:00",
+    "rule": "",
+    "assumed": "pm",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Pick up June at 3pm",
+   "now": "2026-10-02T02:00:00Z",
+   "service": {
+    "title": "Pick up June",
+    "day": "2026-10-02",
+    "time": "15:00",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Pay June 5 at 3",
+   "now": "2026-10-02T02:00:00Z",
+   "service": {
+    "title": "Pay",
+    "day": "2027-06-05",
+    "time": "15:00",
+    "rule": "",
+    "assumed": "pm",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Pay in June at 3",
+   "now": "2026-10-02T02:00:00Z",
+   "service": {
+    "title": "Pay",
+    "day": "2027-06-01",
+    "time": "15:00",
+    "rule": "",
+    "assumed": "pm",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Meet April at the cafe in April at 3",
+   "now": "2026-10-02T02:00:00Z",
+   "service": {
+    "title": "Meet April at the cafe",
+    "day": "2027-04-01",
+    "time": "15:00",
+    "rule": "",
+    "assumed": "pm",
+    "passed": ""
+   }
+  },
+  {
+   "in": "water plants every four days",
+   "service": {
+    "title": "water plants",
+    "day": "2026-10-05",
+    "time": "",
+    "rule": "4:day",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "water plants every 4 days",
+   "service": {
+    "title": "water plants",
+    "day": "2026-10-05",
+    "time": "",
+    "rule": "4:day",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Mow the lawn every three weeks",
+   "service": {
+    "title": "Mow the lawn",
+    "day": "2026-10-22",
+    "time": "",
+    "rule": "3:week",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Pay dues Every Two Months",
+   "service": {
+    "title": "Pay dues",
+    "day": "2026-12-01",
+    "time": "",
+    "rule": "2:month",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "water plants every four days at 9am",
+   "service": {
+    "title": "water plants",
+    "day": "2026-10-01",
+    "time": "09:00",
+    "rule": "4:day",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Stretch every twelve days",
+   "service": {
+    "title": "Stretch",
+    "day": "2026-10-13",
+    "time": "",
+    "rule": "12:day",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Review budget Every Other week",
+   "service": {
+    "title": "Review budget",
+    "day": "2026-10-15",
+    "time": "",
+    "rule": "2:week",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Review budget EVERY OTHER WEEK",
+   "service": {
+    "title": "Review budget",
+    "day": "2026-10-15",
+    "time": "",
+    "rule": "2:week",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Gym Every Other Monday",
+   "service": {
+    "title": "Gym",
+    "day": "2026-10-05",
+    "time": "",
+    "rule": "2:week:1",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Water plants every tuesdays",
+   "service": {
+    "title": "Water plants",
+    "day": "2026-10-06",
+    "time": "",
+    "rule": "1:week:2",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Water plants every 2 tuesdays",
+   "service": {
+    "title": "Water plants",
+    "day": "2026-10-06",
+    "time": "",
+    "rule": "2:week:2",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Gym every other mondays",
+   "service": {
+    "title": "Gym",
+    "day": "2026-10-05",
+    "time": "",
+    "rule": "2:week:1",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Gym every mondays at 6pm",
+   "service": {
+    "title": "Gym",
+    "day": "2026-10-05",
+    "time": "18:00",
+    "rule": "1:week:1",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Sync every Sundays",
+   "service": {
+    "title": "Sync",
+    "day": "2026-10-04",
+    "time": "",
+    "rule": "1:week:7",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Pay every 3 Fridays",
+   "service": {
+    "title": "Pay",
+    "day": "2026-10-02",
+    "time": "",
+    "rule": "3:week:5",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Gym every thursday",
+   "service": {
+    "title": "Gym",
+    "day": "2026-10-01",
+    "time": "",
+    "rule": "1:week:4",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Gym every other thursday",
+   "service": {
+    "title": "Gym",
+    "day": "2026-10-01",
+    "time": "",
+    "rule": "2:week:4",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Gym every other thursday at 9am",
+   "service": {
+    "title": "Gym",
+    "day": "2026-10-01",
+    "time": "09:00",
+    "rule": "2:week:4",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Gym every other thursday",
+   "now": "2026-10-01T17:59:00Z",
+   "service": {
+    "title": "Gym",
+    "day": "2026-10-01",
+    "time": "",
+    "rule": "2:week:4",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Gym every other thursday",
+   "now": "2026-10-01T18:00:00Z",
+   "service": {
+    "title": "Gym",
+    "day": "2026-10-08",
+    "time": "",
+    "rule": "2:week:4",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Gym every thursday",
+   "now": "2026-10-01T22:00:00Z",
+   "service": {
+    "title": "Gym",
+    "day": "2026-10-08",
+    "time": "",
+    "rule": "1:week:4",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Gym every other thursday at 9am",
+   "now": "2026-10-01T22:00:00Z",
+   "service": {
+    "title": "Gym",
+    "day": "2026-10-08",
+    "time": "09:00",
+    "rule": "2:week:4",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Gym every other thursday",
+   "now": "2026-09-29T10:00:00Z",
+   "service": {
+    "title": "Gym",
+    "day": "2026-10-01",
+    "time": "",
+    "rule": "2:week:4",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Call Steven today at 3pm",
+   "now": "2026-10-01T16:00:00Z",
+   "service": {
+    "title": "Call Steven",
+    "day": "2026-10-01",
+    "time": "15:00",
+    "rule": "",
+    "assumed": "",
+    "passed": "kept"
+   }
+  },
+  {
+   "in": "Call Steven today at 3pm",
+   "now": "2026-10-01T14:00:00Z",
+   "service": {
+    "title": "Call Steven",
+    "day": "2026-10-01",
+    "time": "15:00",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Call Steven at 3pm",
+   "now": "2026-10-01T16:00:00Z",
+   "service": {
+    "title": "Call Steven",
+    "day": "2026-10-02",
+    "time": "15:00",
+    "rule": "",
+    "assumed": "",
+    "passed": "moved"
+   }
+  },
+  {
+   "in": "Dinner tonight at 8",
+   "now": "2026-10-01T21:00:00Z",
+   "service": {
+    "title": "Dinner",
+    "day": "2026-10-01",
+    "time": "20:00",
+    "rule": "",
+    "assumed": "",
+    "passed": "kept"
+   }
+  },
+  {
+   "in": "Call Sam this afternoon at 2",
+   "now": "2026-10-01T16:00:00Z",
+   "service": {
+    "title": "Call Sam",
+    "day": "2026-10-01",
+    "time": "14:00",
+    "rule": "",
+    "assumed": "",
+    "passed": "kept"
+   }
+  },
+  {
+   "in": "Call Sam this afternoon at 5",
+   "now": "2026-10-01T16:00:00Z",
+   "service": {
+    "title": "Call Sam",
+    "day": "2026-10-01",
+    "time": "17:00",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Dentist 3/4",
+   "service": {
+    "title": "Dentist",
+    "day": "2027-03-04",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Dentist 3/4",
+   "dateOrder": "dmy",
+   "service": {
+    "title": "Dentist",
+    "day": "2027-04-03",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Meeting 4.3.2027",
+   "service": {
+    "title": "Meeting",
+    "day": "2027-04-03",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Meeting 4.3.2027",
+   "dateOrder": "dmy",
+   "service": {
+    "title": "Meeting",
+    "day": "2027-03-04",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Pay rent 13/12",
+   "dateOrder": "dmy",
+   "service": {
+    "title": "Pay rent",
+    "day": "2026-12-13",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Submit on 10/15",
+   "dateOrder": "dmy",
+   "service": {
+    "title": "Submit",
+    "day": "2026-10-15",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Pay 3/4 at 5pm",
+   "dateOrder": "dmy",
+   "service": {
+    "title": "Pay",
+    "day": "2027-04-03",
+    "time": "17:00",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Submit taxes April 14",
+   "dateOrder": "dmy",
+   "service": {
+    "title": "Submit taxes",
+    "day": "2027-04-14",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Due by sept 30",
+   "dateOrder": "dmy",
+   "service": {
+    "title": "Due",
+    "day": "2027-09-30",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Call at 3.30pm",
+   "dateOrder": "dmy",
+   "service": {
+    "title": "Call",
+    "day": "2026-10-01",
+    "time": "15:30",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
+   }
+  },
+  {
+   "in": "Launch 2026-11-05",
+   "dateOrder": "dmy",
+   "service": {
+    "title": "Launch",
+    "day": "2026-11-05",
+    "time": "",
+    "rule": "",
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -1704,14 +3233,16 @@
     "day": "2027-03-03",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    },
    "local": {
     "title": "Buy milk",
     "day": "2027-02-28",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    },
    "why": "Calendar month and year arithmetic clamps to the last real day here instead of overflowing into the next month."
   },
@@ -1723,14 +3254,16 @@
     "day": "2026-05-01",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    },
    "local": {
     "title": "Buy milk",
     "day": "2026-04-30",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    },
    "why": "Calendar month and year arithmetic clamps to the last real day here instead of overflowing into the next month."
   },
@@ -1742,14 +3275,16 @@
     "day": "2025-03-01",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    },
    "local": {
     "title": "Buy milk",
     "day": "2025-02-28",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    },
    "why": "Calendar month and year arithmetic clamps to the last real day here instead of overflowing into the next month."
   },
@@ -1761,7 +3296,8 @@
     "day": "2026-10-05",
     "time": "09:00",
     "rule": "",
-    "assumed": "am"
+    "assumed": "am",
+    "passed": ""
    }
   },
   {
@@ -1772,7 +3308,8 @@
     "day": "2026-10-03",
     "time": "",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -1783,14 +3320,16 @@
     "day": "2026-10-01",
     "time": "10:00",
     "rule": "1:day",
-    "assumed": "am"
+    "assumed": "am",
+    "passed": ""
    },
    "local": {
     "title": "Stretch",
     "day": "2026-10-02",
     "time": "10:00",
     "rule": "1:day",
-    "assumed": "am"
+    "assumed": "am",
+    "passed": ""
    },
    "why": "A time equal to now advances to the next occurrence here, so capture offers a future occurrence."
   },
@@ -1802,7 +3341,8 @@
     "day": "2026-10-01",
     "time": "12:00",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    }
   },
   {
@@ -1813,16 +3353,18 @@
     "day": "2026-10-01",
     "time": "12:00",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    },
    "local": {
     "title": "Meet",
-    "day": "2026-10-01",
+    "day": "2026-10-02",
     "time": "00:00",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    },
-   "why": "An explicit morning or night at 12 means midnight here; the service reads these ambiguous phrases as noon."
+   "why": "An explicit morning or night at 12 means midnight here, the one that is coming, so tonight at 12 is the start of tomorrow; the service reads these ambiguous phrases as noon."
   },
   {
    "in": "Meet at 12 in the morning",
@@ -1832,16 +3374,18 @@
     "day": "2026-10-01",
     "time": "12:00",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    },
    "local": {
     "title": "Meet",
     "day": "2026-10-02",
     "time": "00:00",
     "rule": "",
-    "assumed": ""
+    "assumed": "",
+    "passed": ""
    },
-   "why": "An explicit morning or night at 12 means midnight here; the service reads these ambiguous phrases as noon."
+   "why": "An explicit morning or night at 12 means midnight here, the one that is coming; the service reads these ambiguous phrases as noon."
   }
  ]
 }

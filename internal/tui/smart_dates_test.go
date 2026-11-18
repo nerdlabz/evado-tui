@@ -97,6 +97,74 @@ func TestCaptureFlipsAnAssumedTime(t *testing.T) {
 	}
 }
 
+// A time that has passed today says so on the capture line, and ctrl+o asks
+// for the other reading without changing what was typed. The choice goes
+// with the create, and editing the text drops it.
+func TestCaptureSwitchesATimeThatHasPassed(t *testing.T) {
+	f := sampleAPI()
+	today := time.Date(2026, 10, 1, 15, 0, 0, 0, time.UTC)
+	f.parseAnswer = func(title string, smart *bool) api.ParsePreview {
+		passed, at := api.TimeKept, today
+		if n := len(f.parsePassed); n > 0 && f.parsePassed[n-1] == api.TimeMoved {
+			passed, at = api.TimeMoved, today.AddDate(0, 0, 1)
+		}
+		return api.ParsePreview{Title: "Call Steven", DoAt: &at, HasTime: true, TimePassed: &passed}
+	}
+	h := newHarness(t, f)
+	h.press("n")
+	setCaptureTitle(h.model, "Call Steven today at 3pm")
+	h.model.previewFor = "Call Steven today at 3pm"
+	h.run(h.model.onPreview(previewDueMsg{seq: h.model.previewSeq}))
+	h.mustContain("time passed, no reminder")
+	h.mustContain("ctrl+o tomorrow instead")
+
+	h.press("ctrl+o")
+	if got := f.parsePassed[len(f.parsePassed)-1]; got != api.TimeMoved || h.model.capturePassed != api.TimeMoved {
+		t.Fatalf("the other reading was asked for as %q (kept %q); want moved", got, h.model.capturePassed)
+	}
+	if got := h.model.form.valueOf("title"); got != "Call Steven today at 3pm" {
+		t.Fatalf("the switch changed the text to %q", got)
+	}
+	h.mustContain("passed today, so tomorrow")
+	h.mustContain("ctrl+o keeps today")
+
+	h.press("ctrl+o")
+	if h.model.capturePassed != api.TimeKept {
+		t.Fatalf("switching back left %q; want kept", h.model.capturePassed)
+	}
+	h.press("ctrl+o")
+	h.press("enter")
+	if len(f.creates) != 1 || f.creates[0].TimePassed != api.TimeMoved {
+		t.Fatalf("capture lost the choice: %+v", f.creates)
+	}
+}
+
+// With no passed time there is nothing to switch, and the key does nothing.
+func TestCaptureHasNothingToSwitchWhenNoTimePassed(t *testing.T) {
+	f := sampleAPI()
+	f.parseAnswer = func(title string, smart *bool) api.ParsePreview {
+		at := time.Date(2026, 10, 2, 15, 0, 0, 0, time.UTC)
+		return api.ParsePreview{Title: "Call Steven", DoAt: &at, HasTime: true}
+	}
+	h := newHarness(t, f)
+	h.press("n")
+	setCaptureTitle(h.model, "Call Steven tomorrow at 3pm")
+	h.model.previewFor = "Call Steven tomorrow at 3pm"
+	h.run(h.model.onPreview(previewDueMsg{seq: h.model.previewSeq}))
+	if out := h.view(); strings.Contains(out, "ctrl+o") || strings.Contains(out, "passed") {
+		t.Fatalf("a time still ahead was shown as passed:\n%s", out)
+	}
+	asked := len(f.parsePassed)
+	h.press("ctrl+o")
+	if h.model.capturePassed != "" || len(f.parsePassed) != asked {
+		t.Fatal("ctrl+o asked for another reading with nothing to switch")
+	}
+	h.press("enter")
+	if len(f.creates) != 1 || f.creates[0].TimePassed != "" {
+		t.Fatalf("capture sent a choice nobody made: %+v", f.creates)
+	}
+}
+
 func TestEditingCaptureResetsThePlainOverride(t *testing.T) {
 	old := parseDebounce
 	parseDebounce = time.Millisecond
@@ -107,10 +175,11 @@ func TestEditingCaptureResetsThePlainOverride(t *testing.T) {
 	h.model.previewFor = "Visit Tomorrow Land"
 	plain := false
 	h.model.captureSmart = &plain
+	h.model.capturePassed = api.TimeMoved
 	h.model.capturePreview = &api.ParsePreview{KeptAsName: "Tomorrow"}
 	setCaptureTitle(h.model, "Dentist at 9")
 	h.model.schedulePreview()
-	if h.model.captureSmart != nil || h.model.capturePreview != nil {
+	if h.model.captureSmart != nil || h.model.capturePassed != "" || h.model.capturePreview != nil {
 		t.Fatal("old override survived a new title")
 	}
 	if strings.Contains(h.model.form.view(), "ctrl+d") {

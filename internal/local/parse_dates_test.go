@@ -54,8 +54,13 @@ func TestParseCountsFromTodayOrTomorrow(t *testing.T) {
 		{"2026-03-31 12:00", "Renew next month", "Renew", "2026-04-30 00:00", false, ""},
 		{"2028-02-29 12:00", "Renew a year from today", "Renew", "2029-02-28 00:00", false, ""},
 		{"2026-11-30 12:00", "Renew a month from tomorrow", "Renew", "2027-01-01 00:00", false, ""},
+		// Days or weeks from a weekday count from the coming one, today
+		// included, as the weekday alone reads.
+		{"", "Review 2 weeks from friday", "Review", "2026-10-16 00:00", false, ""},
+		{"", "Review a day from wednesday", "Review", "2026-10-01 00:00", false, ""},
 		// Counts from a day this reader does not work out stay in the title.
-		{"", "Review 2 weeks from friday", "Review 2 weeks from friday", "", false, ""},
+		{"", "Review 2 months from friday", "Review 2 months from friday", "", false, ""},
+		{"", "Review 2 weeks before friday", "Review 2 weeks before friday", "", false, ""},
 	})
 }
 
@@ -170,7 +175,7 @@ func TestParseThePastGetsNoDate(t *testing.T) {
 
 func TestParseHalfAPhraseGetsNoDate(t *testing.T) {
 	checkReadings(t, []readCase{
-		{"", "Call a week from friday", "Call a week from friday", "", false, ""},
+		{"", "Call a week before friday", "Call a week before friday", "", false, ""},
 		{"", "Call a week from", "Call a week from", "", false, ""},
 		{"", "Meet half past 13 tomorrow", "Meet half past 13 tomorrow", "", false, ""},
 	})
@@ -219,8 +224,10 @@ func TestParseTimeBesideAPhraseNotWorkedOut(t *testing.T) {
 		{"", "Report end of the week at 5pm", "Report end of the week at 5pm", "", false, ""},
 		{"", "Report at 5pm end of next week", "Report at 5pm end of next week", "", false, ""},
 		{"", "Report end of next week at 5", "Report end of next week at 5", "", false, ""},
-		{"", "Review 2 weeks from friday at 5pm", "Review 2 weeks from friday at 5pm", "", false, ""},
-		{"", "Call a week from friday 6pm", "Call a week from friday 6pm", "", false, ""},
+		{"", "Review 2 weeks before friday at 5pm", "Review 2 weeks before friday at 5pm", "", false, ""},
+		{"", "Call a month from friday 6pm", "Call a month from friday 6pm", "", false, ""},
+		// A count from a weekday is read, and the time goes with it.
+		{"", "Review 2 weeks from friday at 5pm", "Review", "2026-10-16 17:00", true, ""},
 		{"", "Party the day after friday at 5pm", "Party the day after friday at 5pm", "", false, ""},
 		// A phrase that was read, and a time that is not beside the other, are as before.
 		{"", "Report end of next month at 5pm", "Report", "2026-10-31 17:00", true, ""},

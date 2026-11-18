@@ -117,6 +117,10 @@ type Model struct {
 	previewSeq     int
 	captureSmart   *bool
 	capturePreview *api.ParsePreview
+	// capturePassed is the reading asked for of a time that has passed
+	// today, api.TimeKept or api.TimeMoved, when ctrl+o switched it from
+	// the one the words gave.
+	capturePassed string
 
 	// frame counts animation ticks, and framing says one is on its way, so
 	// the animation clock only runs while something is moving.
@@ -853,6 +857,7 @@ func (m *Model) openForm(f *form) tea.Cmd {
 	m.previewSeq++
 	m.previewFor = ""
 	m.captureSmart = nil
+	m.capturePassed = ""
 	m.capturePreview = nil
 	f.width = min(m.width-8, 78)
 	f.maxH = max(m.height-6, 10)
@@ -868,7 +873,7 @@ func (m *Model) onFormKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.layer = layerNone
 		return m, nil
 	}
-	if f.id == formNewTodo && (msg.String() == "ctrl+d" || msg.String() == "ctrl+t") {
+	if f.id == formNewTodo && (msg.String() == "ctrl+d" || msg.String() == "ctrl+t" || msg.String() == "ctrl+o") {
 		return m, m.changeCaptureReading(msg.String())
 	}
 	switch msg.String() {
@@ -928,6 +933,7 @@ func (m *Model) schedulePreview() tea.Cmd {
 	}
 	m.previewFor = title
 	m.captureSmart = nil
+	m.capturePassed = ""
 	m.capturePreview = nil
 	m.form.setPreview(previewHint())
 	m.previewSeq++
@@ -949,9 +955,9 @@ func (m *Model) onPreview(msg tea.Msg) tea.Cmd {
 		if msg.seq != m.previewSeq {
 			return nil
 		}
-		ctx, c, title, smart := m.ctx, m.client, m.previewFor, m.captureSmart
+		ctx, c, title, smart, passed := m.ctx, m.client, m.previewFor, m.captureSmart, m.capturePassed
 		return func() tea.Msg {
-			p, err := c.ParseWithSmart(ctx, title, smart)
+			p, err := c.ParseChoosing(ctx, title, smart, passed)
 			return previewMsg{seq: msg.seq, preview: p, err: err}
 		}
 	case previewMsg:
@@ -1121,6 +1127,20 @@ func (m *Model) changeCaptureReading(key string) tea.Cmd {
 			}
 		}
 		m.previewFor = title
+		// The other half of the day is another time, with its own answer
+		// to whether it has passed.
+		m.capturePassed = ""
+	case "ctrl+o":
+		// The other reading of a time that has passed today. The words
+		// stay as typed: the choice goes with the request.
+		switch p.Passed() {
+		case api.TimeKept:
+			m.capturePassed = api.TimeMoved
+		case api.TimeMoved:
+			m.capturePassed = api.TimeKept
+		default:
+			return nil
+		}
 	}
 	m.capturePreview = nil
 	m.previewSeq++
@@ -1135,6 +1155,12 @@ func (m *Model) captureSummary(p *api.ParsePreview) string {
 	}
 	if p.AssumedTime != nil {
 		text += "\nctrl+t flips am/pm"
+	}
+	switch p.Passed() {
+	case api.TimeKept:
+		text += "\nctrl+o tomorrow instead"
+	case api.TimeMoved:
+		text += "\nctrl+o keeps today"
 	}
 	return text
 }

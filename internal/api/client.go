@@ -656,6 +656,12 @@ func (c *Client) Parse(ctx context.Context, title string) (ParsePreview, error) 
 
 // ParseWithSmart can bypass the account's decision model for one title.
 func (c *Client) ParseWithSmart(ctx context.Context, title string, smart *bool) (ParsePreview, error) {
+	return c.ParseChoosing(ctx, title, smart, "")
+}
+
+// ParseChoosing is ParseWithSmart that can also ask for one reading of a
+// time that has already passed today, TimeKept or TimeMoved.
+func (c *Client) ParseChoosing(ctx context.Context, title string, smart *bool, timePassed string) (ParsePreview, error) {
 	// The service wraps the result in "parsed". The bare form is read too,
 	// for a server that answers without the wrapper.
 	var out struct {
@@ -663,9 +669,10 @@ func (c *Client) ParseWithSmart(ctx context.Context, title string, smart *bool) 
 		Parsed *ParsePreview `json:"parsed"`
 	}
 	body := struct {
-		Title string `json:"title"`
-		Smart *bool  `json:"smart,omitempty"`
-	}{Title: title, Smart: smart}
+		Title      string `json:"title"`
+		Smart      *bool  `json:"smart,omitempty"`
+		TimePassed string `json:"timePassed,omitempty"`
+	}{Title: title, Smart: smart, TimePassed: timePassed}
 	_, err := c.do(ctx, http.MethodPost, "/parse", body, &out)
 	if err != nil {
 		return out.ParsePreview, err

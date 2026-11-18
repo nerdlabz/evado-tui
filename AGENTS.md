@@ -44,6 +44,7 @@ evado ls -status today -json
 evado ls -status all -limit 1000 -json       # past 200, read a page at a time
 evado ls -status all -cursor "$NEXT" -json   # carry on where an earlier ls stopped
 evado add -list Work "Send the report Friday 3pm"
+evado add -passed moved "Call Steven at 3pm" # after 3 PM: tomorrow, or -passed kept for today
 printf 'milk\neggs\n' | evado add -          # one todo per line
 evado show 3fa9 -json
 evado edit 3fa9 -day tomorrow -assign sam@example.com
@@ -346,6 +347,13 @@ starting with `evado:`.
   read and what the other half would be (`null` when nothing was guessed);
   typing "3pm" settles it. This is the same on this computer and on the
   server.
+- A time that has already passed today is read by its words. With "today",
+  "tonight" or "this afternoon" the todo stays on today at that time and gets
+  no reminder; with no day ("at 3pm") it goes to tomorrow. `evado parse` says
+  which, and `-json` has `timePassed`: `kept`, `moved`, or `null` when no time
+  had passed. `-passed kept` or `-passed moved` on `add` and `parse` asks for
+  one reading outright, and changes nothing when no time has passed. A repeat,
+  a weekday and "midnight" are never either.
 
 ## Working on this repo
 

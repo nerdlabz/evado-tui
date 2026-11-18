@@ -35,11 +35,13 @@ type fakeAPI struct {
 	smartAvailable, smartParsing bool
 	creates                      []api.NewTodo
 	parseAnswer                  func(string, *bool) api.ParsePreview
-	todos                        []api.Todo
-	lists                        []api.List
-	members                      []api.Member
-	steps                        map[string][]api.ChecklistItem
-	writes                       int
+	// parsePassed is the timePassed each /parse request asked for.
+	parsePassed []string
+	todos       []api.Todo
+	lists       []api.List
+	members     []api.Member
+	steps       map[string][]api.ChecklistItem
+	writes      int
 	// feeds and loads count change-feed pulls and full list loads.
 	feeds, loads int
 	// stubFeed makes every feed pull carry one fixed change, for the Sync tab.
@@ -572,10 +574,12 @@ func (f *fakeAPI) handler(t *testing.T) http.Handler {
 	})
 	mux.HandleFunc("/parse", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
-			Title string
-			Smart *bool
+			Title      string
+			Smart      *bool
+			TimePassed string
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
+		f.parsePassed = append(f.parsePassed, body.TimePassed)
 		if f.parseAnswer != nil {
 			write(w, map[string]any{"parsed": f.parseAnswer(body.Title, body.Smart)})
 			return

@@ -38,8 +38,10 @@ func TestParse(t *testing.T) {
 		{"Gym friday after next", "Gym", "2026-10-09 00:00", false, ""},
 		// A date word inside a longer phrase this reader does not work out
 		// is not read on its own, which would give the wrong day.
-		{"Review 2 weeks from friday", "Review 2 weeks from friday", "", false, ""},
+		{"Review 2 weeks before friday", "Review 2 weeks before friday", "", false, ""},
 		{"Party the day after friday", "Party the day after friday", "", false, ""},
+		// Days or weeks from a weekday count from the coming one.
+		{"Review 2 weeks from friday", "Review", "2026-10-16 00:00", false, ""},
 		{"Report end of next week", "Report end of next week", "", false, ""},
 		{"Sprint the week after next", "Sprint", "2026-10-14 00:00", false, ""},
 		{"Expense dinner from last tuesday", "Expense dinner from last tuesday", "", false, ""},
@@ -57,7 +59,9 @@ func TestParse(t *testing.T) {
 		{"Launch 2026-11-05T14:30", "Launch", "2026-11-05 14:30", true, ""},
 		{"Due by sept 30", "Due", "2026-09-30 00:00", false, ""},
 		{"Gym next friday", "Gym", "2026-10-09 00:00", false, ""},
-		{"Take out bins every wednesday", "Take out bins", "2026-10-07 00:00", false, "1:week:3"},
+		{"Take out bins every wednesday", "Take out bins", "2026-09-30 00:00", false, "1:week:3"}, // today is Wednesday, and it is before 18:00
+		{"Take out bins every other thursdays", "Take out bins", "2026-10-01 00:00", false, "2:week:4"},
+		{"Water plants every four days", "Water plants", "2026-10-04 00:00", false, "4:day"},
 		{"Pay rent every month", "Pay rent", "2026-10-30 00:00", false, "1:month"},
 		{"Stretch daily", "Stretch", "2026-10-01 00:00", false, "1:day"},
 		{"Water plants every other week", "Water plants", "2026-10-14 00:00", false, "2:week"},

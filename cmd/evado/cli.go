@@ -391,13 +391,14 @@ func todoLine(t api.Todo, full bool) string {
 
 // -- commands ---------------------------------------------------------------
 
-const addSynopsis = "add [-list name] [-notes text] [-id id] [-json] <text | ->"
+const addSynopsis = "add [-list name] [-notes text] [-id id] [-passed kept|moved] [-json] <text | ->"
 
 func (c *cli) add(ctx context.Context, args []string) error {
 	fs := newFlags("add")
 	list := fs.String("list", "", "add to this list instead of your personal list")
 	notes := fs.String("notes", "", "notes for the todo")
 	id := fs.String("id", "", "an id of your choosing, so a retried add is recognisable")
+	passed := fs.String("passed", "", passedUsage)
 	pos, err := c.parseArgs(fs, args, addSynopsis)
 	if err != nil {
 		return err
@@ -413,7 +414,7 @@ func (c *cli) add(ctx context.Context, args []string) error {
 		}
 		text = string(b)
 	}
-	todos, err := c.o.Add(ctx, ops.AddInput{Text: text, List: *list, Notes: *notes, ID: *id})
+	todos, err := c.o.Add(ctx, ops.AddInput{Text: text, List: *list, Notes: *notes, ID: *id, TimePassed: *passed})
 	if err != nil && len(todos) == 0 {
 		return err
 	}
@@ -1046,15 +1047,19 @@ func (c *cli) lists(ctx context.Context, args []string) error {
 	return c.write(b.String())
 }
 
-const parseSynopsis = "parse [-json] <text>"
+const parseSynopsis = "parse [-passed kept|moved] [-json] <text>"
+
+// passedUsage describes -passed, which add and parse share.
+const passedUsage = "for a time in the text that has already passed today: kept keeps it on today with no reminder, moved moves it to tomorrow; without it \"today\" or \"tonight\" keeps and a time with no day moves"
 
 func (c *cli) parse(ctx context.Context, args []string) error {
 	fs := newFlags("parse")
+	passed := fs.String("passed", "", passedUsage)
 	pos, err := c.parseArgs(fs, args, parseSynopsis)
 	if err != nil {
 		return err
 	}
-	pv, err := c.o.Parse(ctx, strings.Join(pos, " "))
+	pv, err := c.o.ParseChoosing(ctx, strings.Join(pos, " "), *passed)
 	if err != nil {
 		return err
 	}
@@ -1078,6 +1083,12 @@ func (c *cli) parse(ctx context.Context, args []string) error {
 			b.WriteString("; " + hint)
 		}
 		b.WriteString("\n")
+	}
+	switch pv.Passed() {
+	case api.TimeKept:
+		b.WriteString("passed  that time has passed, so it stays on today with no reminder; -passed moved gives tomorrow\n")
+	case api.TimeMoved:
+		b.WriteString("passed  that time has passed today, so it is for tomorrow; -passed kept keeps it on today\n")
 	}
 	if pv.ScheduledDay == nil && pv.DoAt == nil && pv.DueAt == nil {
 		b.WriteString("no date: it would go to the inbox\n")

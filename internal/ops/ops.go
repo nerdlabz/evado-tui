@@ -135,6 +135,10 @@ type AddInput struct {
 	Notes string
 	// ID is an id chosen by the caller, for a create that can be retried.
 	ID string
+	// TimePassed asks for one reading of a time in the text that has
+	// already passed today: api.TimeKept or api.TimeMoved. Empty leaves it
+	// to the words.
+	TimePassed string
 }
 
 // Add creates one todo, or several when Text has several lines.
@@ -146,6 +150,9 @@ func (o *Ops) Add(ctx context.Context, in AddInput) ([]api.Todo, error) {
 	if in.ID != "" && strings.Contains(text, "\n") {
 		return nil, usagef("an id can only be set when adding a single todo")
 	}
+	if err := passedChoice(in.TimePassed); err != nil {
+		return nil, err
+	}
 	listID, err := o.ListID(ctx, in.List)
 	if err != nil {
 		return nil, err
@@ -154,7 +161,7 @@ func (o *Ops) Add(ctx context.Context, in AddInput) ([]api.Todo, error) {
 	if err != nil {
 		return nil, err
 	}
-	n := api.NewTodo{ID: in.ID, ListID: listID}
+	n := api.NewTodo{ID: in.ID, ListID: listID, TimePassed: in.TimePassed}
 	if notes := strings.TrimSpace(in.Notes); notes != "" {
 		n.Notes = &in.Notes
 	}
@@ -785,8 +792,25 @@ func sameAssignee(a, b *string) bool {
 
 // Parse shows how the server reads a piece of text, creating nothing.
 func (o *Ops) Parse(ctx context.Context, text string) (api.ParsePreview, error) {
+	return o.ParseChoosing(ctx, text, "")
+}
+
+// ParseChoosing is Parse that can ask for one reading of a time that has
+// already passed today, api.TimeKept or api.TimeMoved.
+func (o *Ops) ParseChoosing(ctx context.Context, text, timePassed string) (api.ParsePreview, error) {
 	if strings.TrimSpace(text) == "" {
 		return api.ParsePreview{}, usagef("give some text to parse")
 	}
-	return o.C.Parse(ctx, text)
+	if err := passedChoice(timePassed); err != nil {
+		return api.ParsePreview{}, err
+	}
+	return o.C.ParseChoosing(ctx, text, nil, timePassed)
+}
+
+// passedChoice refuses a reading of a passed time that is not one of the two.
+func passedChoice(s string) error {
+	if s != "" && s != api.TimeKept && s != api.TimeMoved {
+		return usagef("-passed is %s or %s, not %q", api.TimeKept, api.TimeMoved, s)
+	}
+	return nil
 }

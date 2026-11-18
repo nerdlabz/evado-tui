@@ -458,7 +458,10 @@ func (m *Model) createTodo(v map[string]string) tea.Cmd {
 		Notes:  optString(v["notes"]),
 		ListID: m.listIDByName(v["list"]),
 	}
-	if title != m.previewFor {
+	// A choice made on the preview goes with the text it was made for.
+	if title == m.previewFor {
+		n.TimePassed = m.capturePassed
+	} else {
 		n.Smart = nil
 	}
 	if r := strings.TrimSpace(v["remindAt"]); r != "" {

@@ -19,6 +19,9 @@ type reading struct {
 	// Assumed is "am" or "pm" when a time was typed without one and a
 	// reading was guessed, empty otherwise.
 	Assumed string `json:"assumed"`
+	// Passed is "kept" or "moved" when the time had already passed today,
+	// empty otherwise.
+	Passed string `json:"passed"`
 }
 
 func (r reading) String() string {
@@ -35,6 +38,9 @@ func (r reading) String() string {
 	if r.Assumed != "" {
 		when += " (assumed " + r.Assumed + ")"
 	}
+	if r.Passed != "" {
+		when += " (passed, " + r.Passed + ")"
+	}
 	return fmt.Sprintf("%s, %q", when, r.Title)
 }
 
@@ -42,16 +48,20 @@ func (r reading) String() string {
 // parser made of them on a known day. A phrase with a local reading is one
 // the reader here deliberately reads differently, and why says so.
 type corpus struct {
-	Now     time.Time `json:"now"`
-	TZ      string    `json:"tz"`
-	Phrases []struct {
+	Now       time.Time `json:"now"`
+	TZ        string    `json:"tz"`
+	DateOrder string    `json:"dateOrder"`
+	Phrases   []struct {
 		In string `json:"in"`
 		// Now is when the phrase was read, for one such as "in an hour"
 		// whose reading moves with the clock.
-		Now     *time.Time `json:"now"`
-		Service reading    `json:"service"`
-		Local   *reading   `json:"local"`
-		Why     string     `json:"why"`
+		Now *time.Time `json:"now"`
+		// DateOrder is how the account reads a date written in numbers,
+		// for a phrase read the other way round from the corpus's own.
+		DateOrder string   `json:"dateOrder"`
+		Service   reading  `json:"service"`
+		Local     *reading `json:"local"`
+		Why       string   `json:"why"`
 	} `json:"phrases"`
 }
 
@@ -76,9 +86,17 @@ func readCorpus(t *testing.T) corpus {
 	return c
 }
 
-func localReading(in string, loc *time.Location, now time.Time) reading {
-	p := Parse(in, loc, now)
-	r := reading{Title: p.Title, Rule: p.Recurrence}
+// order is how numeric dates read for a phrase: its own, or the corpus's.
+func (c corpus) order(own string) string {
+	if own != "" {
+		return own
+	}
+	return c.DateOrder
+}
+
+func localReading(in string, loc *time.Location, now time.Time, dateOrder string) reading {
+	p := ParseWith(in, loc, now, Options{DateOrder: dateOrder})
+	r := reading{Title: p.Title, Rule: p.Recurrence, Passed: p.TimePassed}
 	if p.Assumed != nil {
 		r.Assumed = p.Assumed.Assumed
 	}
@@ -101,19 +119,21 @@ func TestParseCorpus(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// A phrase is in the corpus again only to be read at another moment.
+	// A phrase is in the corpus again only to be read at another moment or
+	// with numeric dates the other way round.
 	type key struct {
-		in  string
-		now time.Time
+		in    string
+		now   time.Time
+		order string
 	}
 	seen := map[key]bool{}
 	for _, p := range c.Phrases {
-		k := key{p.In, c.when(p.Now)}
+		k := key{p.In, c.when(p.Now), c.order(p.DateOrder)}
 		if seen[k] {
 			t.Errorf("%q is in the corpus twice for %s", p.In, k.now.Format(time.RFC3339))
 		}
 		seen[k] = true
-		got := localReading(p.In, loc, c.when(p.Now))
+		got := localReading(p.In, loc, c.when(p.Now), c.order(p.DateOrder))
 		switch {
 		case p.Local == nil && got != p.Service:
 			t.Errorf("%q: read here as %s; the service read %s", p.In, got, p.Service)
@@ -138,7 +158,7 @@ func TestParseCorpusTable(t *testing.T) {
 	var b strings.Builder
 	b.WriteString("| phrase | service | here |\n| --- | --- | --- |\n")
 	for _, p := range c.Phrases {
-		got := localReading(p.In, loc, c.when(p.Now))
+		got := localReading(p.In, loc, c.when(p.Now), c.order(p.DateOrder))
 		here := "same"
 		if got != p.Service {
 			here = got.String()

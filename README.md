@@ -334,6 +334,17 @@ While adding a todo, `ctrl+d` reads words kept as a name as a date instead,
 and `ctrl+t` flips an assumed morning or evening time. Capture without a
 connection keeps using the local date reader.
 
+A time that has already passed today is read by its words. "Call Steven today
+at 3pm" typed at 4 PM stays on today at 3 PM, with no reminder, because one
+would go off at once. "Call Steven at 3pm" names no day, so it goes to
+tomorrow. The line under the title says which happened, and `ctrl+o` switches
+to the other reading without changing what you typed. From a script, `evado
+parse` says the same and `-passed kept` or `-passed moved` chooses.
+
+An account reads a date written in numbers month first or day first (3/4 is
+March 4 or 3 April), as its `dateOrder` says, and the local reader follows the
+account. Without an account it reads month first.
+
 Two groups of endpoints cannot be used with a pasted API token, because the
 server rejects token auth for them with `403 session_required`:
 

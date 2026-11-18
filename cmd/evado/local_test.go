@@ -175,3 +175,54 @@ func TestCommandsWorkOnTheTodosHere(t *testing.T) {
 		t.Errorf("show after rm: %v, want exit 4", err)
 	}
 }
+
+// A time that has passed today is reported by parse, either reading can be
+// asked for with -passed, and add keeps the choice. "today at 12am" has
+// always passed, whatever the clock says when the test runs.
+func TestPassedTimesOnThisComputer(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "todos.json")
+	const text = "Call Steven today at 12am"
+
+	out, err := runLocal(t, path, "parse", text)
+	if err != nil || !strings.Contains(out, "passed  that time has passed, so it stays on today with no reminder") {
+		t.Errorf("parse: %q, %v; want the kept reading said", out, err)
+	}
+	out, err = runLocal(t, path, "parse", "-passed", "moved", text)
+	if err != nil || !strings.Contains(out, "passed  that time has passed today, so it is for tomorrow") {
+		t.Errorf("parse -passed moved: %q, %v; want the moved reading said", out, err)
+	}
+	var parsed struct {
+		Parse struct {
+			TimePassed *string `json:"timePassed"`
+		} `json:"parse"`
+	}
+	out, err = runLocal(t, path, "parse", "-json", text)
+	if jerr := json.Unmarshal([]byte(out), &parsed); err != nil || jerr != nil || parsed.Parse.TimePassed == nil || *parsed.Parse.TimePassed != "kept" {
+		t.Errorf("parse -json: %q, %v; want timePassed kept", out, err)
+	}
+	out, err = runLocal(t, path, "parse", "-json", "Call Steven tomorrow at 12am")
+	if !strings.Contains(out, `"timePassed": null`) {
+		t.Errorf("parse -json with no passed time: %q, %v; want timePassed null", out, err)
+	}
+
+	var added struct {
+		Todos []struct {
+			DoAt     *string `json:"doAt"`
+			RemindAt *string `json:"remindAt"`
+		} `json:"todos"`
+	}
+	out, err = runLocal(t, path, "add", "-json", text)
+	if jerr := json.Unmarshal([]byte(out), &added); err != nil || jerr != nil || len(added.Todos) != 1 || added.Todos[0].DoAt == nil || added.Todos[0].RemindAt != nil {
+		t.Errorf("add: %q, %v; want a do date and no reminder", out, err)
+	}
+	out, err = runLocal(t, path, "add", "-json", "-passed", "moved", text)
+	if jerr := json.Unmarshal([]byte(out), &added); err != nil || jerr != nil || len(added.Todos) != 1 || added.Todos[0].RemindAt == nil {
+		t.Errorf("add -passed moved: %q, %v; want a reminder", out, err)
+	}
+
+	for _, cmd := range []string{"add", "parse"} {
+		if _, err := runLocal(t, path, cmd, "-passed", "later", text); describe(err).ExitCode != ops.ExitUsage {
+			t.Errorf("%s -passed later: %v; want a usage error", cmd, err)
+		}
+	}
+}

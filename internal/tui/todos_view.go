@@ -537,6 +537,14 @@ func (m *Model) parseSummary(p *api.ParsePreview) string {
 	if p.DueAt != nil {
 		bits = append(bits, "due "+p.DueAt.In(m.loc).Format("2 Jan 15:04"))
 	}
+	// A time that had already gone when it was read: which day it ended up
+	// on is the one thing the date alone does not explain.
+	switch p.Passed() {
+	case api.TimeKept:
+		bits = append(bits, "time passed, no reminder")
+	case api.TimeMoved:
+		bits = append(bits, "passed today, so tomorrow")
+	}
 	if len(bits) == 0 {
 		// Text that names a day but was not read is worth a warning: the
 		// person likely meant a date and would otherwise find the todo in

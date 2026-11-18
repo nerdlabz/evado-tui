@@ -17,8 +17,11 @@ type User struct {
 	Email                 string `json:"email"`
 	// Username is how people find the account to share a list. It is null
 	// until one is chosen, which is different from an empty string.
-	Username  *string   `json:"username"`
-	TZ        string    `json:"tz"`
+	Username *string `json:"username"`
+	TZ       string  `json:"tz"`
+	// DateOrder is how the account reads a date written in numbers: "mdy"
+	// makes 3/4 March 4 and "dmy" the 3rd of April.
+	DateOrder string    `json:"dateOrder,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 
@@ -252,8 +255,13 @@ func Statuses() []string {
 // NewTodo is the create body. Only Title is required; a newline in Title
 // splits the input into several todos server-side.
 type NewTodo struct {
-	Smart        *bool   `json:"smart,omitempty"`
-	Parse        *bool   `json:"parse,omitempty"`
+	Smart *bool `json:"smart,omitempty"`
+	Parse *bool `json:"parse,omitempty"`
+	// TimePassed asks for one reading of a time in the title that has
+	// already passed today: TimeKept keeps the todo on today at that time
+	// with no reminder, TimeMoved moves it to tomorrow. Empty leaves it to
+	// the words: "today" or "tonight" keeps, and a time with no day moves.
+	TimePassed   string  `json:"timePassed,omitempty"`
 	ID           string  `json:"id,omitempty"`
 	Title        string  `json:"title"`
 	Notes        *string `json:"notes,omitempty"`
@@ -353,9 +361,29 @@ type ParsePreview struct {
 	RecurrenceRule *string `json:"recurrenceRule"`
 	// AssumedTime is set when a time was typed without am/pm and one half of
 	// the day was guessed.
-	AssumedTime *AssumedTime   `json:"assumedTime"`
-	Raw         map[string]any `json:"-"`
+	AssumedTime *AssumedTime `json:"assumedTime"`
+	// TimePassed is TimeKept or TimeMoved when the time read had already
+	// passed today, and nil otherwise.
+	TimePassed *string        `json:"timePassed"`
+	Raw        map[string]any `json:"-"`
 }
+
+// Passed is TimePassed as a plain string, empty when no time had passed.
+func (p ParsePreview) Passed() string {
+	if p.TimePassed == nil {
+		return ""
+	}
+	return *p.TimePassed
+}
+
+// What became of a time typed for today that had already passed when it was
+// read. TimeKept: the words said today or tonight, so the todo stays on
+// today at that time and gets no reminder. TimeMoved: no day was said, so it
+// went to tomorrow at that time.
+const (
+	TimeKept  = "kept"
+	TimeMoved = "moved"
+)
 
 // AssumedTime says which half of the day a time typed without am/pm was
 // read as. Replacing Text with AlternativeText in the title says the other

@@ -25,6 +25,29 @@ type Parsed struct {
 	// Assumed is set when a time was typed without am/pm and one reading
 	// was guessed.
 	Assumed *AssumedTime
+	// TimePassed is set when the time read had already passed today: Kept
+	// when the words said today, so the todo stays there with its time gone
+	// and gets no reminder, and Moved when no day was said, so it went to
+	// tomorrow. It is empty otherwise, and for a repeat.
+	TimePassed string
+}
+
+// The two readings of a time that has already passed today, as the service
+// names them.
+const (
+	Kept  = api.TimeKept
+	Moved = api.TimeMoved
+)
+
+// Options change how a line is read.
+type Options struct {
+	// TimePassed asks for one reading of a time that has passed today, Kept
+	// or Moved, in place of the one the words give. It changes nothing when
+	// no time has passed.
+	TimePassed string
+	// DateOrder is how a date written in numbers reads: "dmy" makes 3/4 the
+	// 3rd of April. Anything else is month first, March 4.
+	DateOrder string
 }
 
 // AssumedTime is what a bare time was read as and what the other half of the
@@ -106,9 +129,12 @@ var ordinalWords = func() string {
 }()
 
 var (
-	everyRe = regexp.MustCompile(`(?i)\bevery\s+(?:(other|\d+)\s+)?(days?|weeks?|months?|years?|` +
-		`monday|mon|tuesdays?|tues|tue|wednesdays?|weds|wed|thursdays?|thurs|thur|thu|fridays?|fri|saturdays?|sat|sundays?|sun)\b\.?`)
-	keywordRe = regexp.MustCompile(`(?i)\b(daily|weekly|monthly|yearly|annually)\b`)
+	everyRe = regexp.MustCompile(`(?i)\bevery\s+(?:(other|\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\s+)?(days?|weeks?|months?|years?|` +
+		`mondays?|mon|tuesdays?|tues|tue|wednesdays?|weds|wed|thursdays?|thurs|thur|thu|fridays?|fri|saturdays?|sat|sundays?|sun)\b\.?`)
+	// everyPartRe is a repeat on a weekday with a part of the day, "every
+	// friday evening", which says which half a time after it is in.
+	everyPartRe = regexp.MustCompile(`(?i)\bevery\s+\w+\s+(?:morning|afternoon|evening|night)\b`)
+	keywordRe   = regexp.MustCompile(`(?i)\b(daily|weekly|monthly|yearly|annually)\b`)
 	// danglingRe is a connector left at the end of the title once the date
 	// is cut out. "coming" is not one: it is usually a verb, as in
 	// "Contractor coming at 7:30".
@@ -123,10 +149,16 @@ var (
 	// dates sit at the end of casual input.
 	relativeRe = regexp.MustCompile(`(?i)\b(?:(?:the\s+)?day\s+(after|before)\s+)?` +
 		`(today|tonight|tomorrow|tmrw|yesterday|this\s+(?:morning|afternoon|evening))` + partOfDay + `\b`)
-	weekdayRe  = regexp.MustCompile(`(?i)\b(?:(this\s+coming|the\s+coming|this|next)\s+)?(` + weekdayWords + `)` + partOfDay + `\b`)
-	weekendRe  = regexp.MustCompile(`(?i)\b(?:(this|next|the)\s+)?weekend\b`)
-	inRe       = regexp.MustCompile(`(?i)\bin\s+(` + countWords + `)\s+(` + unitWords + `)s?\b`)
-	fromRe     = regexp.MustCompile(`(?i)\b(` + countWords + `)\s+(` + unitWords + `)s?\s+(?:(?:from|after)\s+(now|today|tomorrow)|later)\b`)
+	weekdayRe = regexp.MustCompile(`(?i)\b(?:(this\s+coming|the\s+coming|this|next)\s+)?(` + weekdayWords + `)` + partOfDay + `\b`)
+	weekendRe = regexp.MustCompile(`(?i)\b(?:(this|next|the)\s+)?weekend\b`)
+	inRe      = regexp.MustCompile(`(?i)\bin\s+(` + countWords + `)\s+(` + unitWords + `)s?\b`)
+	fromRe    = regexp.MustCompile(`(?i)\b(` + countWords + `)\s+(` + unitWords + `)s?\s+(?:(?:from|after)\s+(now|today|tomorrow)|later)\b`)
+	// fromWeekdayRe is "three weeks from wednesday": the coming Wednesday, as
+	// the weekday alone reads, and then that many days or weeks on.
+	fromWeekdayRe = regexp.MustCompile(`(?i)\b(` + countWords + `)\s+(day|week)s?\s+from\s+(` + weekdayWords + `)\b`)
+	// monthCueRe is a month after a word that makes it a date and not a name
+	// or a verb: "in june", "by october". It is the first of that month.
+	monthCueRe = regexp.MustCompile(`(?i)\b(in|on|by|until|before|after|from)\s+(` + monthWords + `)\b`)
 	soonRe     = regexp.MustCompile(`(?i)\bin\s+(` + countWords + `)\s+(hour|hr|minute|min)s?\b`)
 	nextUnitRe = regexp.MustCompile(`(?i)\bnext\s+(week|month|year)\b`)
 	// afterNextRe is a weekday in the week after the next one, as the
@@ -159,8 +191,23 @@ var (
 	// followed by the time.
 	isoTimeRe = regexp.MustCompile(`\b(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2})\b`)
 	// slashRe is a numeric date. It is month first, as the service reads
-	// it, unless the first number cannot be a month.
+	// it, unless the first number cannot be a month or the account reads
+	// the day first.
 	slashRe = regexp.MustCompile(`\b(\d{1,2})/(\d{1,2})(?:/(\d{4}|\d{2}))?\b`)
+	// dottedRe is a numeric date written with dots or dashes. It needs its
+	// year in full, so that a time such as 3.30 or a version such as 4.3.2
+	// is left alone.
+	dottedRe = regexp.MustCompile(`\b(\d{1,2})([.-])(\d{1,2})([.-])(\d{4})\b`)
+
+	// A date word that is capitalised, with a capitalised word after it, is
+	// part of a name: "Friday Night Lights", "Tomorrow Land". A word in front
+	// that points at a date (dateCueRe) makes it one again, and so does a
+	// line that opens with the date and goes on to what to do (actionRe),
+	// as in "Tomorrow Buy milk".
+	nameCoreRe  = regexp.MustCompile(`^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*$`)
+	nameAfterRe = regexp.MustCompile(`^\s+[A-Z][a-z]+\b`)
+	dateCueRe   = regexp.MustCompile(`(?i)\b(?:on|in|at|by|until|before|after|from|next)\s*$`)
+	actionRe    = regexp.MustCompile(`^\s+(?:Buy|Call|Visit|Meet|Pay|Watch|Send|Book|Pick|Get|Take|Make|Check|Email|Text|Review|Finish|Start|Submit|Schedule|Plan|Have|Go|Renew|Order|Clean|Write|Read|Bring|Drop|Collect|Prepare|Work|Do)\b`)
 
 	// unclaimedRe finds longer phrases that hold a date word but mean
 	// something this reader does not work out. Reading the date word on its
@@ -174,7 +221,7 @@ var (
 		`|day\s+(?:after|before)(?:\s+\w+)?` +
 		`)\b`)
 
-	clockRe  = regexp.MustCompile(`(?i)\b(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b`)
+	clockRe  = regexp.MustCompile(`(?i)\b(?:at\s+)?(\d{1,2})(?:[:.](\d{2}))?\s*(am|pm)\b`)
 	clock24  = regexp.MustCompile(`(?i)\b(?:at\s+)?([01]?\d|2[0-3]):([0-5]\d)\b`)
 	clockNom = regexp.MustCompile(`(?i)\b(?:at\s+)?(noon|midday|midnight)\b`)
 
@@ -190,6 +237,16 @@ var (
 	// afternoon", "at 8 tonight".
 	partAfterRe = regexp.MustCompile(`(?i)^(?:\s+(in\s+the)\s+(morning|afternoon|evening|night)\b` +
 		`|\s+(?:this\s+)?(morning|afternoon|evening|night|tonight)\b)`)
+	// A part of the day in front of a time says which half too: "tonight at
+	// 8", "tomorrow morning at 7". Only with a day in front of it: in "movie
+	// night at 7:30" it is part of the title.
+	partBeforeRe = regexp.MustCompile(`(?i)\b(?:(tonight)|(?:this|tomorrow|in\s+the|` + weekdayWords + `)\s+(morning|afternoon|evening|night))[\s,]*$`)
+	// After "every friday evening" the repeat is cut out and only the part
+	// of the day is left in front of the time.
+	loosePartBeforeRe = regexp.MustCompile(`(?i)\b(morning|afternoon|evening|night)[\s,]*$`)
+	// colonClockRe is a time such as 7:30 written with no "at" and no am/pm,
+	// which leaves the half of the day to be worked out as "at 7:30" does.
+	colonClockRe = regexp.MustCompile(`(1[01]|[1-9]):([0-5]\d)`)
 	// notBareRe is what stops a number after "at" from being a time:
 	// "at 5th", "at 5.30", "at 5,000", "at 5 pm" and "at 3 in the" something.
 	notBareRe = regexp.MustCompile(`(?i)^(?:[\w:/-]|[.,]\d|\s*(?:[ap]\.?m\b|o'?clock|noon|midnight)|\s+in\s+the\b)`)
@@ -222,6 +279,11 @@ func (s span) covers(o span) bool   { return s.from <= o.from && o.to <= s.to }
 
 // Parse reads a line of capture text in loc, as of now.
 func Parse(raw string, loc *time.Location, now time.Time) Parsed {
+	return ParseWith(raw, loc, now, Options{})
+}
+
+// ParseWith is Parse with the reading changed as opts says.
+func ParseWith(raw string, loc *time.Location, now time.Time, opts Options) Parsed {
 	text := strings.Join(strings.Fields(raw), " ")
 	if text == "" {
 		return Parsed{}
@@ -230,12 +292,12 @@ func Parse(raw string, loc *time.Location, now time.Time) Parsed {
 	rule, rest := extractRecurrence(text)
 	now = now.In(loc)
 
-	found, haveDay := findDay(rest, now)
+	found, haveDay := findDay(rest, now, opts.DateOrder == "dmy")
 	daySpan := found.at
 	var clk clock
 	var haveClock bool
 	if !found.backward {
-		clk, haveClock = findClock(rest, daySpan, haveDay)
+		clk, haveClock = findClock(rest, daySpan, haveDay, ruleWeekday(rule) && everyPartRe.MatchString(text))
 	}
 	if found.timed {
 		// "in an hour" is already a time; a clock beside it is not read.
@@ -256,7 +318,7 @@ func Parse(raw string, loc *time.Location, now time.Time) Parsed {
 		}
 		// A recurrence without any other date still needs its first
 		// occurrence.
-		at := NextOccurrence(rule, loc, now, 0, 0)
+		at := firstUntimedOccurrence(rule, loc, now)
 		title := stripConnectors(rest)
 		if title == "" {
 			title = text
@@ -264,49 +326,99 @@ func Parse(raw string, loc *time.Location, now time.Time) Parsed {
 		return Parsed{Title: title, DoAt: &at, Recurrence: rule}
 	}
 
-	// when is the moment for an hour on the 24-hour clock.
-	when := func(hour int) time.Time {
+	// A time at the very front with the day later in the line is one
+	// schedule, and a part of the day in that day says which half the time
+	// is in: "8:30 have coffee tomorrow morning" is 08:30 tomorrow.
+	if haveClock && clk.bare && clk.colon && clk.at.from == 0 && haveDay && found.part != "" {
+		clk.bare, clk.hour = false, inPartBefore(clk.hour, found.part)
+	}
+
+	// when is the moment for an hour on the 24-hour clock, and what became
+	// of it if it had already passed today.
+	when := func(hour int) (time.Time, string) {
+		on := func(d time.Time, ahead int) time.Time {
+			return time.Date(d.Year(), d.Month(), d.Day()+ahead, hour, clk.minute, 0, 0, loc)
+		}
+		// "at midnight" is the one coming, never one that has gone.
+		midnight := clk.midnight && hour == 0 && clk.minute == 0
+		// choose is the reading of a passed time: the one asked for, or
+		// the one the words give.
+		choose := func(words string) string {
+			if opts.TimePassed == Kept || opts.TimePassed == Moved {
+				return opts.TimePassed
+			}
+			return words
+		}
 		switch {
 		case !haveDay && ruleWeekday(rule):
 			// "every monday at 9am": the time belongs to the first occurrence.
-			return firstWeekdayOccurrence(rule, loc, now, hour, clk.minute)
+			return firstWeekdayOccurrence(rule, loc, now, hour, clk.minute), ""
 		case haveDay:
-			d := found.day
-			return time.Date(d.Year(), d.Month(), d.Day(), hour, clk.minute, 0, 0, loc)
+			at := on(found.day, 0)
+			if !haveClock || !at.Before(now) {
+				return at, ""
+			}
+			switch {
+			case found.sameDay && rule == "" && !midnight:
+				// The words said today, so a time that has gone stays on
+				// today unless the other reading was asked for.
+				if choose(Kept) == Moved {
+					return on(found.day, 1), Moved
+				}
+				return at, Kept
+			case found.sameDay:
+				return on(found.day, 1), ""
+			case found.weekday:
+				// "thursday at 9" typed on a Thursday after 9 is next week's.
+				return on(found.day, 7), ""
+			}
+			return at, ""
 		}
 		// A time on its own means today, or tomorrow once it has passed.
 		d := dateOf(now)
-		at := time.Date(d.Year(), d.Month(), d.Day(), hour, clk.minute, 0, 0, loc)
-		if !at.After(now) {
-			at = time.Date(d.Year(), d.Month(), d.Day()+1, hour, clk.minute, 0, 0, loc)
+		at := on(d, 0)
+		if at.After(now) {
+			return at, ""
 		}
-		return at
+		if rule != "" || midnight {
+			return on(d, 1), ""
+		}
+		if choose(Moved) == Kept {
+			return at, Kept
+		}
+		return on(d, 1), Moved
 	}
 	hour := clk.hour
 	var assumed *AssumedTime
 	if haveClock && clk.bare {
 		// A time with a day of its own, or one that repeats, is read by the
 		// hour. Without, it is the soonest the clock reaches it. "Next
-		// month" names no day, so "next month at 8" is the second kind.
+		// month" names no day, so "next month at 8" is the second kind, and
+		// a time on a day said to be today takes the half still ahead.
 		pm := byHour(clk.hour)
-		if (!haveDay || found.loose) && rule == "" {
+		switch {
+		case rule != "":
+		case !haveDay || found.loose:
 			pm = soonest(clk.hour, clk.minute, now, loc)
+		case found.today:
+			pm = laterToday(clk.hour, clk.minute, now, loc)
 		}
 		hour = hour24(clk.hour, pm)
+		other, _ := when(hour24(clk.hour, !pm))
 		assumed = &AssumedTime{
 			Text:            rest[clk.at.from:clk.at.to],
 			Assumed:         meridiem(pm),
-			AlternativeText: spoken(clk.hour, clk.minute, !pm),
-			AlternativeDoAt: when(hour24(clk.hour, !pm)),
+			AlternativeText: spoken(clk.hour, clk.minute, !pm, !clk.colon),
+			AlternativeDoAt: other,
 		}
 	}
-	at := when(hour)
+	at, passed := when(hour)
 
 	title := cut(rest, daySpan, haveDay, clk.at, haveClock)
 	if title == "" {
 		title = text // never hand back an empty title
 	}
-	return Parsed{Title: title, DoAt: &at, HasTime: haveClock || found.timed, Recurrence: rule, Assumed: assumed}
+	return Parsed{Title: title, DoAt: &at, HasTime: haveClock || found.timed, Recurrence: rule, Assumed: assumed, TimePassed: passed}
 }
 
 // A time typed without am/pm is read as the half of the day people mostly
@@ -362,10 +474,29 @@ func soonest(hour, minute int, now time.Time, loc *time.Location) (pm bool) {
 	return pm
 }
 
+// laterToday is the half of the day for a bare time on a day said to be
+// today: the half the hour suggests while that is still ahead, else the
+// other half while that is, so "today at 9" typed at 10 AM is 9 PM. Once
+// both have gone it is the half a time with no day of its own would take,
+// and the todo stays on today with that time passed.
+func laterToday(hour, minute int, now time.Time, loc *time.Location) (pm bool) {
+	first := byHour(hour)
+	for _, half := range []bool{first, !first} {
+		if time.Date(now.Year(), now.Month(), now.Day(), hour24(hour, half), minute, 0, 0, loc).After(now) {
+			return half
+		}
+	}
+	return soonest(hour, minute, now, loc)
+}
+
 // spoken is a time said outright, as the service puts it in the text that
-// would replace a bare one: "at 8pm", "at 5:30am".
-func spoken(hour, minute int, pm bool) string {
-	out := "at " + strconv.Itoa(hour)
+// would replace a bare one: "at 8pm", "at 5:30am", or "7:30pm" for a time
+// typed with no "at".
+func spoken(hour, minute int, pm, at bool) string {
+	out := strconv.Itoa(hour)
+	if at {
+		out = "at " + out
+	}
 	if minute != 0 {
 		out += fmt.Sprintf(":%02d", minute)
 	}
@@ -448,6 +579,17 @@ type dayMatch struct {
 	// loose is a month or a year with no day of its own ("in 2 months", "next
 	// year"): a bare time beside it is chosen as if no day had been given.
 	loose bool
+	// sameDay is a phrase that says today: today, tonight, this morning,
+	// this afternoon or this evening. A time on it that has passed stays.
+	sameDay bool
+	// today is the word "today" itself.
+	today bool
+	// weekday is a day of the week, which is next week's once its time has
+	// passed today.
+	weekday bool
+	// part is the part of the day in the phrase, "morning" in "tomorrow
+	// morning", empty for none.
+	part string
 }
 
 // afterColon is whether a match starts with a number that is the minutes of a
@@ -508,18 +650,28 @@ func besideUnclaimed(text string, clock, day span, haveDay bool) bool {
 
 // findDay looks for a date in the text. Of the matches that are not part
 // of a longer one, it returns the one starting last.
-func findDay(text string, now time.Time) (dayMatch, bool) {
+func findDay(text string, now time.Time, dayFirst bool) (dayMatch, bool) {
 	today := dateOf(now)
 	unclaimed := unclaimedSpans(text)
 	var all []dayMatch
+	// last is the match add just took, for a caller to say more about, or
+	// nil when it was not taken.
+	var last *dayMatch
 	add := func(m []int, day time.Time, loose bool) {
+		last = nil
 		s := span{m[0], m[1]}
 		for _, u := range unclaimed {
 			if s.overlaps(u) && !s.covers(u) {
 				return
 			}
 		}
+		before, after := text[:s.from], text[s.to:]
+		if nameCoreRe.MatchString(text[s.from:s.to]) && nameAfterRe.MatchString(after) && !dateCueRe.MatchString(before) &&
+			(strings.TrimSpace(before) != "" || !actionRe.MatchString(after)) {
+			return // part of a name
+		}
 		all = append(all, dayMatch{day: day, at: s, loose: loose})
+		last = &all[len(all)-1]
 	}
 	take := func(m []int, day time.Time) { add(m, day, false) }
 	// takeUnit is take for a day counted in units, of which months and years
@@ -554,6 +706,13 @@ func findDay(text string, now time.Time) (dayMatch, bool) {
 			n--
 		}
 		take(m, today.AddDate(0, 0, n))
+		if last == nil {
+			return
+		}
+		last.part = partOf(text[m[0]:m[1]])
+		if n == 0 && sub(m, 1) == "" {
+			last.sameDay, last.today = true, sub(m, 2) == "today"
+		}
 	})
 	each(weekdayRe, func(m []int) {
 		// Forward to the next such day, or today if it is that day; "next
@@ -568,6 +727,9 @@ func findDay(text string, now time.Time) (dayMatch, bool) {
 			}
 		}
 		take(m, today.AddDate(0, 0, ahead))
+		if last != nil {
+			last.weekday, last.part = true, partOf(text[m[0]:m[1]])
+		}
 	})
 	each(weekendRe, func(m []int) {
 		// The weekend starts on Saturday; on a Sunday it is today.
@@ -621,8 +783,34 @@ func findDay(text string, now time.Time) (dayMatch, bool) {
 		}
 		take(m, addUnit(base, count(sub(m, 1)), sub(m, 2)))
 	})
+	each(fromWeekdayRe, func(m []int) {
+		if afterAt(text, m) != m[0] {
+			return // the hour of a time, so not a count
+		}
+		ahead := (int(weekdays[sub(m, 3)]) - int(today.Weekday()) + 7) % 7
+		n := min(count(sub(m, 1)), 3650)
+		if sub(m, 2) == "week" {
+			n *= 7
+		}
+		take(m, today.AddDate(0, 0, ahead+n))
+	})
 	each(nextUnitRe, func(m []int) {
 		takeUnit(m, addUnit(today, 1, sub(m, 1)), sub(m, 1))
+	})
+	each(monthCueRe, func(m []int) {
+		// The first of the month, this year's unless that has gone. The
+		// month names no day, so a bare time beside it is read as if no
+		// day had been given. "in" goes with the month; the other words
+		// are connectors that come off the title's end anyway.
+		first := time.Date(today.Year(), months[sub(m, 2)], 1, 0, 0, 0, 0, today.Location())
+		if first.Before(today) {
+			first = first.AddDate(1, 0, 0)
+		}
+		from := m[4]
+		if sub(m, 1) == "in" {
+			from = m[0]
+		}
+		add([]int{from, m[1]}, first, true)
 	})
 	monthDay := func(m []int, month time.Month, day, year string) {
 		d, ok := ordinals[strings.ReplaceAll(day, " ", "-")]
@@ -654,14 +842,26 @@ func findDay(text string, now time.Time) (dayMatch, bool) {
 		monthDay(m, months[sub(m, 1)], sub(m, 2), sub(m, 3))
 	})
 	each(dayMonthRe, func(m []int) { monthDay(m, months[sub(m, 2)], sub(m, 1), sub(m, 3)) })
-	each(slashRe, func(m []int) {
-		a, _ := strconv.Atoi(sub(m, 1))
-		b, _ := strconv.Atoi(sub(m, 2))
-		if a > 12 {
-			a, b = b, a
+	// numeric reads two numbers as a month and a day: month first, or day
+	// first when the account reads dates that way, and either way round when
+	// the number in the month's place cannot be one (13/12 is 13 December).
+	numeric := func(m []int, a, b, year string) {
+		month, _ := strconv.Atoi(a)
+		day, _ := strconv.Atoi(b)
+		if dayFirst {
+			month, day = day, month
 		}
-		if a >= 1 && a <= 12 {
-			monthDay(m, time.Month(a), strconv.Itoa(b), sub(m, 3))
+		if month > 12 {
+			month, day = day, month
+		}
+		if month >= 1 && month <= 12 {
+			monthDay(m, time.Month(month), strconv.Itoa(day), year)
+		}
+	}
+	each(slashRe, func(m []int) { numeric(m, sub(m, 1), sub(m, 2), sub(m, 3)) })
+	each(dottedRe, func(m []int) {
+		if sub(m, 2) == sub(m, 4) {
+			numeric(m, sub(m, 1), sub(m, 3), sub(m, 5))
 		}
 	})
 	each(isoRe, func(m []int) {
@@ -765,11 +965,15 @@ type clock struct {
 	// bare is a time typed without am/pm. Its hour is the one typed, 1 to
 	// 12, and which half of the day it is has yet to be worked out.
 	bare bool
+	// colon is a time written as 7:30 with no "at" in front.
+	colon bool
+	// midnight is the word itself, which means the midnight coming.
+	midnight bool
 }
 
 // findClock looks for a time of day. A bare hour and minute such as 17:30
 // is only taken as a time when it does not sit inside the date.
-func findClock(text string, day span, haveDay bool) (c clock, ok bool) {
+func findClock(text string, day span, haveDay, loosePart bool) (c clock, ok bool) {
 	var taken []span
 	// claim keeps a stretch of the text from being read as a time twice, and
 	// says whether it was free.
@@ -801,22 +1005,42 @@ func findClock(text string, day span, haveDay bool) (c clock, ok bool) {
 		n, _ := strconv.Atoi(text[m[2*i]:m[2*i+1]])
 		return n
 	}
-	// bare reads an hour typed without am/pm, unless what follows it says
+	// bare reads an hour typed without am/pm, unless what is around it says
 	// which half of the day, or that it is not a time at all.
 	bare := func(s span, h, min int) {
 		rest := text[s.to:]
 		if p := partAfterRe.FindStringSubmatchIndex(rest); p != nil {
+			part := p[6:8]
 			if p[2] >= 0 {
 				s.to += p[1] // "in the afternoon" goes with the time
-				take(s, inPartOfDay(h, strings.ToLower(rest[p[4]:p[5]])), min, false)
-			} else {
-				take(s, inPartOfDay(h, strings.ToLower(rest[p[6]:p[7]])), min, false)
+				part = p[4:6]
+			}
+			hour := inPartOfDay(h, strings.ToLower(rest[part[0]:part[1]]))
+			take(s, hour, min, false)
+			// 12 at night or in the morning is midnight, the one coming.
+			if ok && c.at == s && h == 12 && hour == 0 {
+				c.midnight = true
 			}
 			return
 		}
 		if notBareRe.MatchString(rest) {
 			claim(s)
 			return
+		}
+		// Not for 12: "tonight at 12" is neither noon nor the midnight
+		// that starts the day.
+		if h != 12 {
+			if p := partBeforeRe.FindStringSubmatch(text[:s.from]); p != nil {
+				take(s, inPartBefore(h, strings.ToLower(p[1]+p[2])), min, false)
+				return
+			}
+			if p := loosePartBeforeRe.FindStringSubmatchIndex(text[:s.from]); loosePart && p != nil {
+				// The part of the day is the repeat's, so it goes with the time.
+				part := strings.ToLower(text[p[2]:p[3]])
+				s.from = p[0]
+				take(s, inPartBefore(h, part), min, false)
+				return
+			}
 		}
 		take(s, h, min, true)
 	}
@@ -867,17 +1091,63 @@ func findClock(text string, day span, haveDay bool) (c clock, ok bool) {
 			take(s, h, min, false)
 		}
 	}
+	// "7:30" with no "at" and no am/pm is as bare as "at 7:30". Not inside a
+	// longer number, a date or another time, and not 07:30 or 12:30, which
+	// say the hour as it is.
+	for _, m := range colonClockRe.FindAllStringSubmatchIndex(text, -1) {
+		s := span{m[0], m[1]}
+		if m[0] > 0 && (isWord(text[m[0]-1]) || strings.IndexByte(":./-", text[m[0]-1]) >= 0) {
+			continue
+		}
+		before := len(taken)
+		bare(s, num(m, 1), num(m, 2))
+		// Only a span this pass claimed is a time with no "at": one read
+		// above as "at 7:30" or "7:30pm" was refused here.
+		if len(taken) > before && ok && c.at.from == s.from && c.bare {
+			c.colon = true
+		}
+	}
 	for _, m := range clock24.FindAllStringSubmatchIndex(text, -1) {
 		take(span{m[0], m[1]}, num(m, 1), num(m, 2), false)
 	}
 	for _, m := range clockNom.FindAllStringSubmatchIndex(text, -1) {
 		if strings.EqualFold(text[m[2]:m[3]], "midnight") {
 			take(span{m[0], m[1]}, 0, 0, false)
+			if ok && c.at == (span{m[0], m[1]}) {
+				c.midnight = true
+			}
 		} else {
 			take(span{m[0], m[1]}, 12, 0, false)
 		}
 	}
 	return c, ok
+}
+
+func isWord(b byte) bool {
+	return b == '_' || b >= '0' && b <= '9' || b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z'
+}
+
+// partOf is the part of the day in a day phrase, "evening" in "tomorrow
+// evening", or empty. "tonight" is not one: the word is its own day.
+func partOf(phrase string) string {
+	f := strings.Fields(strings.ToLower(phrase))
+	if len(f) > 1 {
+		switch p := f[len(f)-1]; p {
+		case "morning", "afternoon", "evening", "night":
+			return p
+		}
+	}
+	return ""
+}
+
+// inPartBefore is an hour typed from 1 to 11 on the 24-hour clock when a
+// part of the day stands in front of it: the morning is before noon, and
+// "tonight at 8", "tomorrow evening at 7" and "this afternoon at 2" after.
+func inPartBefore(h int, part string) int {
+	if part == "morning" {
+		return h % 12
+	}
+	return h%12 + 12
 }
 
 // inPartOfDay is an hour typed from 1 to 12 on the 24-hour clock when a part
@@ -916,6 +1186,8 @@ func extractRecurrence(text string) (rule, remainder string) {
 		if m[2] >= 0 {
 			if c := strings.ToLower(text[m[2]:m[3]]); c == "other" {
 				interval = 2
+			} else if n, word := counts[c]; word {
+				interval = n
 			} else if n, err := strconv.Atoi(c); err == nil && n > 0 {
 				interval = min(n, 365)
 			}
@@ -961,6 +1233,26 @@ func firstWeekdayOccurrence(ruleText string, loc *time.Location, now time.Time, 
 		}
 	}
 	return NextOccurrence(ruleText, loc, now, hour, minute)
+}
+
+// untimedTodayCutoff is the hour from which a weekly repeat typed on its own
+// weekday with no time starts next week instead of today.
+const untimedTodayCutoff = 18
+
+// firstUntimedOccurrence is where a rule typed with no time starts. A weekly
+// rule on a day of the week typed on that day is today before 18:00 and a
+// week out from then on; typed on another day it is the coming one, whatever
+// the count, so "every other thursday" never starts two weeks out.
+func firstUntimedOccurrence(ruleText string, loc *time.Location, now time.Time) time.Time {
+	r, ok := parseRule(ruleText)
+	if !ok || r.weekday == 0 || r.unit != "week" {
+		return NextOccurrence(ruleText, loc, now, 0, 0)
+	}
+	w := now.In(loc)
+	if weekdayIndex(w.Weekday()) == r.weekday && w.Hour() < untimedTodayCutoff {
+		return time.Date(w.Year(), w.Month(), w.Day(), 0, 0, 0, 0, loc)
+	}
+	return NextOccurrence(ruleText, loc, now, 0, 0)
 }
 
 // ValidRule reports whether s is a recurrence rule the service accepts.
