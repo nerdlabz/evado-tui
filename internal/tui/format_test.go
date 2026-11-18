@@ -206,3 +206,30 @@ func TestDetailShowsAllOfALongLinkInNotes(t *testing.T) {
 		t.Errorf("notes show %q, want the whole link %q", got, link)
 	}
 }
+
+// What was typed is shown when it says more than the title. A capture of
+// several lines is kept whole on every todo it made, so only the line a todo
+// came from is shown, and nothing when no line can be told to be its own.
+func TestAsTypedShowsATodosOwnLine(t *testing.T) {
+	text := func(s string) *string { return &s }
+	capture := "Dentist appointment yesterday 11:30\nPay the cable bill today 7pm\nReply to Sam about the offsite\nPay friday the rent"
+	for _, c := range []struct {
+		title string
+		raw   *string
+		want  string
+	}{
+		{"Pay the cable bill", text("Pay the cable bill today 7pm"), "Pay the cable bill today 7pm"},
+		{"Pay the cable bill", text("Pay the cable bill"), ""},
+		{"Pay the cable bill", nil, ""},
+		{"Pay the cable bill", text(capture), "Pay the cable bill today 7pm"},
+		{"Dentist appointment", text(capture), "Dentist appointment yesterday 11:30"},
+		// The line is the title: there is nothing more to show.
+		{"Reply to Sam about the offsite", text(capture), ""},
+		// The date sat in the middle, so no line holds the title.
+		{"Pay the rent", text(capture), ""},
+	} {
+		if got := asTyped(api.Todo{Title: c.title, RawInput: c.raw}); got != c.want {
+			t.Errorf("asTyped(%q) = %q, want %q", c.title, got, c.want)
+		}
+	}
+}

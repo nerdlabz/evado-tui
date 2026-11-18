@@ -25,9 +25,20 @@ func (b *Backend) SeedDemo(ctx context.Context) error {
 	c := b.Client()
 	// Capture deliberately leaves phrases about the past alone. An ISO
 	// date gives this sample a definite overdue day without guessing.
-	made, err := c.CreateTodos(ctx, api.NewTodo{Title: strings.ReplaceAll(demoTitles, "{{yesterday}}", yesterday)})
-	if err != nil {
-		return err
+	//
+	// Each line is a capture of its own. A capture of several lines keeps
+	// all of them as what was typed, on every todo it makes, and a sample
+	// todo should show only its own line.
+	var made []api.Todo
+	for _, line := range strings.Split(strings.ReplaceAll(demoTitles, "{{yesterday}}", yesterday), "\n") {
+		if line = strings.TrimSpace(line); line == "" {
+			continue
+		}
+		todos, err := c.CreateTodos(ctx, api.NewTodo{Title: line})
+		if err != nil {
+			return err
+		}
+		made = append(made, todos...)
 	}
 	for _, todo := range made {
 		switch {

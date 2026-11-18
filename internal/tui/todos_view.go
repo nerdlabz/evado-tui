@@ -504,6 +504,33 @@ func (v *todosView) emptyState(w, h int) string {
 	return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, block)
 }
 
+// asTyped is the words a todo was captured from, when they say more than
+// its title does. A capture of several lines is kept whole on every todo it
+// made, so the line this one came from is picked out: the one that holds
+// its title. When no line does, because the date sat in the middle of the
+// words, nothing is shown: every line of the capture would be the other
+// todos' text, not this one's.
+func asTyped(t api.Todo) string {
+	if t.RawInput == nil {
+		return ""
+	}
+	typed := strings.TrimSpace(*t.RawInput)
+	if strings.Contains(typed, "\n") {
+		lines := typed
+		typed = ""
+		for _, line := range strings.Split(lines, "\n") {
+			if line = strings.TrimSpace(line); line != "" && strings.Contains(line, t.Title) {
+				typed = line
+				break
+			}
+		}
+	}
+	if typed == t.Title {
+		return ""
+	}
+	return typed
+}
+
 // parseView shows how the server read a title, without creating anything.
 func (v *todosView) parseView(width int) string {
 	p := v.parsePreview
@@ -1095,9 +1122,9 @@ func (v *todosView) todoCard(t api.Todo, steps []api.ChecklistItem, haveSteps bo
 			add(" " + lipgloss.NewStyle().Foreground(colFg).Render(l))
 		}
 	}
-	if t.RawInput != nil && *t.RawInput != t.Title {
+	if typed := asTyped(t); typed != "" {
 		add("", " "+label("as typed"))
-		for _, l := range wrapText(*t.RawInput, tw) {
+		for _, l := range wrapText(typed, tw) {
 			add(" " + styFaint.Render(l))
 		}
 	}

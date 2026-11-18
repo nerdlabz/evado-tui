@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -45,6 +46,10 @@ func TestDemoUsesTemporarySamplesAndLeavesTheRealProfileAlone(t *testing.T) {
 	}
 	done, overdue, timed := 0, 0, 0
 	for _, todo := range todos {
+		// Each sample is a capture of its own, so what was typed is one line.
+		if todo.RawInput == nil || strings.Contains(*todo.RawInput, "\n") || !strings.HasPrefix(*todo.RawInput, todo.Title) {
+			t.Errorf("%q was typed as %v; want its own line", todo.Title, todo.RawInput)
+		}
 		if todo.IsCompleted {
 			done++
 		}
