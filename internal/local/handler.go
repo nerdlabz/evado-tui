@@ -183,7 +183,7 @@ func (b *Backend) forward(w http.ResponseWriter, r *http.Request, path string) b
 		return true
 	}
 	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "evado-tui")
+	req.Header.Set("User-Agent", api.UserAgent())
 	web := b.web
 	if link.HTTP != nil {
 		web = link.HTTP

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -42,8 +43,32 @@ func TestAuthHeaderAndAccept(t *testing.T) {
 	if gotAccept != "application/json" {
 		t.Errorf("Accept = %q", gotAccept)
 	}
-	if gotAgent == "" {
-		t.Error("missing User-Agent")
+	if want := "evado-tui/dev (" + runtime.GOOS + "; " + runtime.GOARCH + ")"; gotAgent != want {
+		t.Errorf("User-Agent = %q, want %q", gotAgent, want)
+	}
+}
+
+// The User-Agent names the build once the program has said which it is, so
+// the service can tell releases apart.
+func TestUserAgentNamesTheVersion(t *testing.T) {
+	t.Cleanup(func() { SetVersion("dev") })
+	for version, want := range map[string]string{
+		"1.0.0":         "evado-tui/1.0.0 (",
+		"":              "evado-tui/dev (",
+		"1.0.0 patched": "evado-tui/1.0.0-patched (",
+	} {
+		SetVersion(version)
+		var got string
+		c, _ := newServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			got = r.Header.Get("User-Agent")
+			_, _ = w.Write([]byte(`{"todos":[]}`))
+		}))
+		if _, err := c.ListTodos(context.Background(), TodoFilter{Status: StatusOpen}); err != nil {
+			t.Fatalf("ListTodos: %v", err)
+		}
+		if !strings.HasPrefix(got, want) || !strings.HasSuffix(got, runtime.GOOS+"; "+runtime.GOARCH+")") {
+			t.Errorf("version %q: User-Agent = %q, want %s…", version, got, want)
+		}
 	}
 }
 

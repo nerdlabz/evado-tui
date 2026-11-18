@@ -14,6 +14,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"syscall"
@@ -29,6 +30,21 @@ import (
 
 // version is overridden at build time with -ldflags "-X main.version=…".
 var version = "dev"
+
+// buildVersion is the stamped version. A build made with go install stamps
+// nothing, so for one of those it is the module version Go recorded, which
+// is the release tag.
+func buildVersion() string {
+	if version != "dev" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok {
+		if v := info.Main.Version; v != "" && v != "(devel)" {
+			return strings.TrimPrefix(v, "v")
+		}
+	}
+	return version
+}
 
 func main() {
 	var (
@@ -48,9 +64,10 @@ func main() {
 	flag.Parse()
 
 	if *showVer {
-		fmt.Println("evado", version)
+		fmt.Println("evado", buildVersion())
 		return
 	}
+	api.SetVersion(buildVersion())
 
 	var cfg config.Config
 	cleanupDemo := func() {}

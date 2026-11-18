@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -189,6 +190,27 @@ func WithUserAgent(ua string) Option {
 	return func(c *Client) { c.agent = ua }
 }
 
+// userAgent is what every client sends unless WithUserAgent says otherwise.
+// It names the build and the platform, so the service can tell which
+// releases are still in use and which one a report came from.
+var userAgent = agentFor("dev")
+
+func agentFor(version string) string {
+	version = strings.Join(strings.Fields(version), "-")
+	if version == "" {
+		version = "dev"
+	}
+	return fmt.Sprintf("evado-tui/%s (%s; %s)", version, runtime.GOOS, runtime.GOARCH)
+}
+
+// SetVersion names the running build in the User-Agent of every client
+// built from then on. The program calls it once at start, before any client
+// exists.
+func SetVersion(version string) { userAgent = agentFor(version) }
+
+// UserAgent is the User-Agent a new client sends.
+func UserAgent() string { return userAgent }
+
 // New builds a client for the given bearer token. A token starting with
 // "evt_" is stripped of a stray "Bearer " prefix for convenience.
 func New(token string, opts ...Option) *Client {
@@ -201,7 +223,7 @@ func New(token string, opts ...Option) *Client {
 			// moved server into a baffling "token rejected". do reports it.
 			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
-		agent: "evado-tui",
+		agent: userAgent,
 	}
 	for _, o := range opts {
 		o(c)
