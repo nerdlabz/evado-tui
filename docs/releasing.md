@@ -36,7 +36,9 @@ release keys.
    The tag must match it, or the workflow stops.
 2. If `go.mod` or `go.sum` changed since the last release, recompute
    `vendorHash` in `nix/source.nix`. The hash covers the Go vendor tree, not
-   the release binary.
+   the release binary. CI's `nix` job builds the source flake on every pull
+   request, so a stale hash fails there, and the failure prints the hash it
+   expected.
 3. Tag the merge commit and push the tag:
 
    ```sh
@@ -47,7 +49,10 @@ release keys.
 4. When the release is published, update the two package channels below with
    the release's generated `evado.rb` and `release.json`.
 
-The same packaging can be run locally:
+CI's `package` job builds all seven targets and runs the packager on every
+pull request, and its `nix` job evaluates the binary flake with the manifest
+that produced, so a tag is not the first time any of this runs. The same
+packaging can be run locally:
 
 ```sh
 EVADO_BUILD_VERSION=1.0.0 mise run build-all

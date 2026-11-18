@@ -58,3 +58,62 @@ jobs:
           go-version-file: go.mod
           cache: false
       - run: go test ./...
+
+  # A tag is the first time the release workflow runs, so what it does to the
+  # source is proved here first: every target compiles, and the packager
+  # turns the binaries into archives, a formula and a Nix manifest that its
+  # own checksums agree with. Nothing is uploaded.
+  package:
+    runs-on: ${{ (github.event.pull_request.head.repo.fork || vars.CI_RUNNERS == 'github') && 'ubuntu-24.04' || 'blacksmith-2vcpu-ubuntu-2404' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+        with:
+          cache: false
+      - name: Build every release target
+        run: EVADO_BUILD_VERSION="$(cat VERSION)" mise run build-all
+      - name: Package them as a release would
+        run: |
+          version=$(cat VERSION)
+          mise exec -- python3 scripts/third-party-notices.py > dist/THIRD_PARTY_NOTICES.txt
+          python3 scripts/package-release.py "$version" \
+            --repository "$GITHUB_REPOSITORY" \
+            --notices dist/THIRD_PARTY_NOTICES.txt --output dist/release
+          (cd dist/release && sha256sum --check SHA256SUMS)
+          ruby -c dist/release/evado.rb
+          got=$(./dist/evado_linux_amd64 -version)
+          if [[ "$got" != "evado $version" ]]; then
+            echo "Built binary reports '$got', expected 'evado $version'" >&2
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nix-release-manifest
+          path: dist/release/release.json
+          if-no-files-found: error
+          retention-days: 1
+
+  # The source flake pins the Go modules by hash and runs the tests in Nix's
+  # sandbox, and the binary flake reads a release's manifest. Neither is
+  # built by anything else, so a stale hash would first show to someone
+  # installing with Nix. Nix runs on a GitHub-hosted runner on both sides.
+  nix:
+    needs: package
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: cachix/install-nix-action@v31
+      - name: Build from source
+        run: |
+          nix build .#evado --print-build-logs
+          got=$(./result/bin/evado -version)
+          if [[ "$got" != "evado $(cat VERSION)" ]]; then
+            echo "Nix build reports '$got', expected 'evado $(cat VERSION)'" >&2
+            exit 1
+          fi
+      - uses: actions/download-artifact@v4
+        with:
+          name: nix-release-manifest
+          path: packaging/nix
+      - name: Evaluate the binary flake with this build's manifest
+        run: nix eval --raw "path:$PWD/packaging/nix#evado.name"
