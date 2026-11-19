@@ -711,9 +711,13 @@ func fetchLists(ctx context.Context, c *api.Client) tea.Cmd {
 	}
 }
 
+// createList sends the list with an id chosen here, so that an answer lost
+// after the service made the list cannot leave a second one behind: the same
+// id sent again finds the first.
 func createList(ctx context.Context, c *api.Client, name string) tea.Cmd {
+	id := local.NewID()
 	return func() tea.Msg {
-		if _, err := c.CreateList(ctx, name); err != nil {
+		if _, err := c.CreateListWithID(ctx, id, name); err != nil {
 			return listsMsg{err: err}
 		}
 		ls, err := c.ListLists(ctx)

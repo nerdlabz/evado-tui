@@ -685,3 +685,102 @@ func TestADeletedListWaitsForAMoveThatCannotGoYet(t *testing.T) {
 		t.Errorf("the service has %+v, want the todo moved to Home before Trip went", up)
 	}
 }
+
+// A list sent with an id whose answer never came back is kept here under
+// that id. Sending the request again finds it rather than making a second,
+// and the sync that follows asks the service for the same id, so a list the
+// service did make is found there too.
+func TestARetriedListCreateWithAnIDMakesOneList(t *testing.T) {
+	ctx := context.Background()
+	svc, url := newService(t)
+	b := syncedAt(t, filepath.Join(t.TempDir(), "todos.json"), url)
+	c := b.Client()
+	id := NewID()
+
+	svc.down.Store(true)
+	first, err := c.CreateListWithID(ctx, id, "Trip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	again, err := c.CreateListWithID(ctx, id, "Trip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.ID != first.ID || len(b.lists()) != 2 {
+		t.Fatalf("lists = %+v, want the retry to answer the list made first", b.lists())
+	}
+
+	svc.lists = append(svc.lists, api.List{ID: id, Name: "Trip", Role: "owner"})
+	svc.down.Store(false)
+	mustSync(t, b)
+	trips := slices.DeleteFunc(slices.Clone(svc.lists), func(l api.List) bool { return l.Name != "Trip" })
+	if len(trips) != 1 || !slices.Equal(svc.listIDs, []string{id}) {
+		t.Errorf("service lists = %+v, ids sent = %q, want the one list, asked for by %s", svc.lists, svc.listIDs, id)
+	}
+	if got := strings.Join(listNames(t, c), ","); got != "Personal,Trip" {
+		t.Errorf("lists here = %s", got)
+	}
+	if st := b.Status(); st.Pending != 0 || st.Err != nil {
+		t.Errorf("status = %+v", st)
+	}
+}
+
+// Deleting a list here before the sync has confirmed it must also delete
+// it on the service when an attempt to make it got there, or the next pull
+// brings it back.
+func TestDeletingAListWhoseCreateReachedTheServiceDoesNotBringItBack(t *testing.T) {
+	svc, b, packed := madeButNotSaved(t)
+	if svc.named("Trip") == nil {
+		t.Fatal("the service did not get the create")
+	}
+	trip := b.lists()
+	if len(trip) != 2 {
+		t.Fatalf("lists here = %+v, want the one made but not confirmed", trip)
+	}
+	for _, l := range trip {
+		if l.Name == "Trip" {
+			if err := b.Client().DeleteList(context.Background(), l.ID); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	mustSync(t, b)
+	mustSync(t, b)
+	if svc.named("Trip") != nil {
+		t.Errorf("the service still has %+v", svc.lists)
+	}
+	if got := strings.Join(listNames(t, b.Client()), ","); got != "Personal" {
+		t.Errorf("lists here = %s, want the deleted one gone", got)
+	}
+	if got := svc.todos[packed.ID]; got != nil && got.DeletedAt == nil && got.ListID != "p1" {
+		t.Errorf("the todo made in the list is %+v", got)
+	}
+	if st := b.Status(); st.Pending != 0 || st.Err != nil {
+		t.Errorf("status = %+v", st)
+	}
+}
+
+// If no attempt ever reached the service, deleting the list is still
+// settled by a sync: the service has no such list.
+func TestDeletingAListTheServiceNeverHeardOfSettles(t *testing.T) {
+	ctx := context.Background()
+	svc, url := newService(t)
+	b := syncedAt(t, filepath.Join(t.TempDir(), "todos.json"), url)
+	c := b.Client()
+	svc.down.Store(true)
+	trip, err := c.CreateListWithID(ctx, NewID(), "Trip")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := c.DeleteList(ctx, trip.ID); err != nil {
+		t.Fatal(err)
+	}
+	svc.down.Store(false)
+	res := mustSync(t, b)
+	if svc.named("Trip") != nil || len(res.ListsRefused) != 0 {
+		t.Errorf("service lists = %+v, refused %q", svc.lists, res.ListsRefused)
+	}
+	if st := b.Status(); st.Pending != 0 || st.Err != nil {
+		t.Errorf("status = %+v", st)
+	}
+}

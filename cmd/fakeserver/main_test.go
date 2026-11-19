@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -80,5 +81,58 @@ func TestConcurrentRequestsShareTheStoreSafely(t *testing.T) {
 	wg.Wait()
 	if w := call(t, h, http.MethodGet, "/todos?status=all", "Bearer evt_dev", ""); !strings.Contains(w.Body.String(), "Call the bank") {
 		t.Errorf("the todos added are not there: %s", w.Body)
+	}
+}
+
+func TestCreatingAListAnswersTheListAsTheServiceDoes(t *testing.T) {
+	h := newServer(newStore(), "evt_dev")
+	made := func(w *httptest.ResponseRecorder) (map[string]any, bool) {
+		t.Helper()
+		var out struct {
+			List       map[string]any   `json:"list"`
+			Lists      []map[string]any `json:"lists"`
+			Idempotent bool             `json:"idempotent"`
+		}
+		if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+			t.Fatalf("%s: %v", w.Body, err)
+		}
+		if out.Lists != nil {
+			t.Fatalf("answered lists, want one list: %s", w.Body)
+		}
+		return out.List, out.Idempotent
+	}
+
+	w := call(t, h, http.MethodPost, "/lists", "Bearer evt_dev", `{"name":"Errands"}`)
+	l, _ := made(w)
+	if w.Code != http.StatusCreated || l["name"] != "Errands" || l["id"] == "" || l["role"] != "owner" {
+		t.Errorf("create: %d %s, want 201 and the list", w.Code, w.Body)
+	}
+
+	const id = "6f9a1d52-3c1e-4b6e-8f0a-2d9b7c4e5a10"
+	first := call(t, h, http.MethodPost, "/lists", "Bearer evt_dev", `{"id":"`+id+`","name":"Trip"}`)
+	l, repeat := made(first)
+	if first.Code != http.StatusCreated || l["id"] != id || repeat {
+		t.Errorf("create with an id: %d %s, want 201 under that id", first.Code, first.Body)
+	}
+	again := call(t, h, http.MethodPost, "/lists", "Bearer evt_dev", `{"id":"`+id+`","name":"Trip, again"}`)
+	l, repeat = made(again)
+	if again.Code != http.StatusOK || l["id"] != id || l["name"] != "Trip" || !repeat {
+		t.Errorf("repeat: %d %s, want 200 and the list as it is", again.Code, again.Body)
+	}
+
+	var all struct {
+		Lists []struct{ Name string } `json:"lists"`
+	}
+	if err := json.Unmarshal(call(t, h, http.MethodGet, "/lists", "Bearer evt_dev", "").Body.Bytes(), &all); err != nil {
+		t.Fatal(err)
+	}
+	trips := 0
+	for _, x := range all.Lists {
+		if x.Name == "Trip" {
+			trips++
+		}
+	}
+	if trips != 1 {
+		t.Errorf("%d lists named Trip, want a repeat to make no second", trips)
 	}
 }

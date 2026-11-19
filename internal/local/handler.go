@@ -1457,6 +1457,7 @@ func listName(raw string) (string, *problem) {
 func (b *Backend) createList(w http.ResponseWriter, r *http.Request, path string) {
 	raw, _ := io.ReadAll(r.Body)
 	var body struct {
+		ID   string `json:"id"`
 		Name string `json:"name"`
 	}
 	_ = json.Unmarshal(raw, &body)
@@ -1481,9 +1482,22 @@ func (b *Backend) createList(w http.ResponseWriter, r *http.Request, path string
 		case len(b.st.Lists) >= 25:
 			return 0, invalid("too many lists")
 		}
+		// The attempt that could not be answered may have reached the
+		// service, so the sync asks for the id it was sent, which finds that
+		// list. The same request sent again finds the list made here.
+		if signed && body.ID != "" {
+			for _, l := range b.st.Lists {
+				if l.CreateID == body.ID {
+					return http.StatusOK, map[string]any{"list": l.List, "idempotent": true}
+				}
+			}
+		}
 		l := List{Local: true, List: api.List{
 			ID: NewID(), Name: name, OwnerID: b.st.User.ID, Role: "owner", CreatedAt: b.now(),
 		}}
+		if signed {
+			l.CreateID = body.ID
+		}
 		b.st.Lists = append(b.st.Lists, l)
 		return http.StatusCreated, map[string]any{"list": l.List}
 	})
@@ -1566,6 +1580,12 @@ func (b *Backend) removeList(id string) {
 			l.Name, l.Renamed, l.Was = l.Was, false, ""
 		}
 		b.st.Deleted = append(b.st.Deleted, l)
+	} else if b.st.UserID != "" && gone.CreateID != "" {
+		// An attempt to create it may have reached the service, which
+		// names the list by the id it was sent. Asking for its deletion
+		// there keeps the next pull from bringing it back; if it never
+		// arrived, the service has no such list, which counts as done.
+		b.st.Deleted = append(b.st.Deleted, List{List: api.List{ID: gone.CreateID, Name: gone.Name, Role: "owner"}})
 	}
 	b.st.Lists = kept
 	now := b.now()
