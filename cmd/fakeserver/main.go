@@ -492,11 +492,20 @@ func newServer(s *store, token string) http.Handler {
 
 	mux.HandleFunc(prefix+"/lists", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
-			var body struct{ Name string }
+			var body struct{ ID, Name string }
 			_ = json.NewDecoder(r.Body).Decode(&body)
-			s.lists = append(s.lists, list{
-				ID: s.next("l"), Name: body.Name, OwnerID: "u1", Role: "owner", CreatedAt: time.Now(),
-			})
+			if idx := s.findList(body.ID); body.ID != "" && idx >= 0 {
+				s.write(w, map[string]any{"list": s.lists[idx], "idempotent": true})
+				return
+			}
+			l := list{ID: body.ID, Name: body.Name, OwnerID: "u1", Role: "owner", CreatedAt: time.Now()}
+			if l.ID == "" {
+				l.ID = s.next("l")
+			}
+			s.lists = append(s.lists, l)
+			w.WriteHeader(http.StatusCreated)
+			s.write(w, map[string]any{"list": l})
+			return
 		}
 		s.write(w, map[string]any{"lists": s.lists})
 	})

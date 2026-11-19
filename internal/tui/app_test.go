@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -39,9 +40,11 @@ type fakeAPI struct {
 	parsePassed []string
 	todos       []api.Todo
 	lists       []api.List
-	members     []api.Member
-	steps       map[string][]api.ChecklistItem
-	writes      int
+	// listIDs is the id each POST /lists carried, empty for none.
+	listIDs []string
+	members []api.Member
+	steps   map[string][]api.ChecklistItem
+	writes  int
 	// feeds and loads count change-feed pulls and full list loads.
 	feeds, loads int
 	// stubFeed makes every feed pull carry one fixed change, for the Sync tab.
@@ -255,11 +258,16 @@ func (f *fakeAPI) handler(t *testing.T) http.Handler {
 	})
 	mux.HandleFunc("/lists", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
-			var body struct{ Name string }
+			var body struct{ ID, Name string }
 			_ = json.NewDecoder(r.Body).Decode(&body)
-			f.lists = append(f.lists, api.List{
-				ID: "l_new", Name: body.Name, Role: "owner",
-			})
+			f.listIDs = append(f.listIDs, body.ID)
+			id := body.ID
+			if id == "" {
+				id = "l_new"
+			}
+			if !slices.ContainsFunc(f.lists, func(l api.List) bool { return l.ID == id }) {
+				f.lists = append(f.lists, api.List{ID: id, Name: body.Name, Role: "owner"})
+			}
 		}
 		write(w, map[string]any{"lists": f.lists})
 	})
@@ -1201,6 +1209,23 @@ func TestDangerousConfirmationNeedsTwoEnters(t *testing.T) {
 	h.press("enter") // commits
 	if len(f.lists) != 2 {
 		t.Errorf("lists = %d, want the list deleted", len(f.lists))
+	}
+}
+
+func TestNewListIsSentWithAnID(t *testing.T) {
+	f := sampleAPI()
+	h := newHarness(t, f)
+	h.press("2", "n")
+	h.typeText("Errands")
+	h.press("enter")
+	if len(f.listIDs) != 1 || f.listIDs[0] == "" {
+		t.Fatalf("ids sent = %q, want one", f.listIDs)
+	}
+	h.press("n")
+	h.typeText("Garden")
+	h.press("enter")
+	if len(f.listIDs) != 2 || f.listIDs[1] == "" || f.listIDs[1] == f.listIDs[0] {
+		t.Errorf("ids sent = %q, want a new id for each list", f.listIDs)
 	}
 }
 
