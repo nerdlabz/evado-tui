@@ -57,6 +57,10 @@ func (v *todosView) toggle(m *Model) tea.Cmd {
 	if len(v.marks) > 0 {
 		return v.bulkComplete(m)
 	}
+	return v.toggleSelected(m)
+}
+
+func (v *todosView) toggleSelected(m *Model) tea.Cmd {
 	t := v.selected()
 	if t == nil {
 		return nil

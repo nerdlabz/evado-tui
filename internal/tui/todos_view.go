@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
 	"github.com/nerdlabz/evado-tui/internal/api"
@@ -51,11 +52,11 @@ func (v *todosView) view(width, height int) string {
 	// On a wide terminal the open todo sits beside the list. Otherwise it
 	// takes the list's place, and esc brings the list back.
 	if m.inDetail() && l.prevW == 0 {
-		panes = append(panes, v.detailPane(l.mainW, l.h))
+		panes = append(panes, clickable(v.detailPane(l.mainW, l.h), v.clickDetail))
 	} else {
-		panes = append(panes, v.mainPane(l.mainW, l.h))
+		panes = append(panes, scrollable(v.mainPane(l.mainW, l.h), v.wheelMain))
 		if l.prevW > 0 {
-			panes = append(panes, v.detailPane(l.prevW, l.h))
+			panes = append(panes, clickable(v.detailPane(l.prevW, l.h), v.clickDetail))
 		}
 	}
 	return joinPanes(panes...)
@@ -103,7 +104,7 @@ func (v *todosView) listBody(w, h int) string {
 	} else {
 		out = v.rows.render(w, func(i int, sel bool) string {
 			return v.line(i, sel, w-1)
-		})
+		}, v.clickRow)
 	}
 	if extra != "" {
 		out = clipBlock(out, w, max(h, 1)) + "\n\n" + extra
@@ -336,7 +337,9 @@ func (m *Model) todoRow(v *todosView, t api.Todo, selected bool, width int) stri
 		flagCell = base.Render(" ") + on(styFaint).Render(flags)
 	}
 
-	row := bar + on(markSty).Render(mark) + base.Render(" ") +
+	id := t.ID
+	tick := clickable(on(markSty).Render(mark), func(bool) tea.Cmd { return v.clickMark(id) })
+	row := bar + tick + base.Render(" ") +
 		v.titleCell(t, titleW, base, selected) + flagCell
 	if c.listW > 0 {
 		row += base.Render(" ") + m.listCell(t.ListID, c.listW, on)
@@ -687,15 +690,16 @@ func (v *todosView) sideRow(it sideItem, cursor bool, w int) string {
 		num.Render(count) + base.Render(" ")
 }
 
-// sidebarLines lays the sidebar out. itemAt gives the item drawn on each
-// line, or -1, which is what lets a click find what it landed on.
-func (v *todosView) sidebarLines(w, h int) (lines []string, itemAt []int) {
+// sidebarLines lays the sidebar out, each item clickable.
+func (v *todosView) sidebarLines(w, h int) (lines []string) {
 	m := v.m
 	items := v.sideItems()
 	focused := m.focus == focusSidebar
 	add := func(s string, item int) {
+		if item >= 0 {
+			s = clickable(s, func(bool) tea.Cmd { return v.clickSide(item) })
+		}
 		lines = append(lines, s)
-		itemAt = append(itemAt, item)
 	}
 	for i := 0; i < sideViews; i++ {
 		add(v.sideRow(items[i], focused && v.side == i, w), i)
@@ -765,11 +769,11 @@ func (v *todosView) sidebarLines(w, h int) (lines []string, itemAt []int) {
 			add(l, -1)
 		}
 	}
-	return lines, itemAt
+	return lines
 }
 
 func (v *todosView) sidebarPane(w, h int) string {
-	lines, _ := v.sidebarLines(w-2, h-2)
+	lines := v.sidebarLines(w-2, h-2)
 	return frame(strings.Join(lines, "\n"), w, h, frameOpts{
 		title:   "Views",
 		focused: v.m.focus == focusSidebar,
@@ -880,6 +884,9 @@ func (v *todosView) boardBody(w, h int) string {
 	return joinPanes(cols...)
 }
 
+// boardHead is how many rows a board column spends on its heading.
+const boardHead = 3
+
 func (v *todosView) boardColumn(i, w, h int) string {
 	m := v.m
 	col := v.bcols[i]
@@ -907,7 +914,10 @@ func (v *todosView) boardColumn(i, w, h int) string {
 	}
 	end := min(start+fit, len(col.idxs))
 	for r := start; r < end; r++ {
-		lines = append(lines, v.card(v.items[col.idxs[r]], active && r == v.brow, w)...)
+		t := v.items[col.idxs[r]]
+		card := v.card(t, active && r == v.brow, w)
+		body := clickable(strings.Join(card[:2], "\n"), func(double bool) tea.Cmd { return v.clickCard(t.ID, double) })
+		lines = append(append(lines, strings.Split(body, "\n")...), card[2:]...)
 	}
 	if len(col.idxs) == 0 {
 		lines = append(lines, " "+styFaint.Render("nothing here"))
@@ -936,7 +946,9 @@ func (v *todosView) card(t api.Todo, selected bool, w int) []string {
 	}
 	inner := max(w-1, 4)
 	mark, markSty := v.todoMark(t)
-	top := bar + on(markSty).Render(mark) + base.Render(" ") + v.titleCell(t, max(inner-3, 1), base, selected)
+	id := t.ID
+	tick := clickable(on(markSty).Render(mark), func(bool) tea.Cmd { return v.clickMark(id) })
+	top := bar + tick + base.Render(" ") + v.titleCell(t, max(inner-3, 1), base, selected)
 
 	var meta []string
 	if clock := m.todoClock(t); clock != "" {
@@ -1053,8 +1065,9 @@ func (v *todosView) todoCard(t api.Todo, steps []api.ChecklistItem, haveSteps bo
 	}
 	for i, l := range wrapText(t.Title, tw-2) {
 		lead := "  "
-		if i == 0 {
-			lead = markSty.Render(mark) + " "
+		if i == 0 && t.ID != "" {
+			id := t.ID
+			lead = clickable(markSty.Render(mark), func(bool) tea.Cmd { return v.clickMark(id) }) + " "
 		}
 		add(" " + lead + titleSty.Render(l))
 	}
@@ -1150,8 +1163,9 @@ func (v *todosView) todoCard(t api.Todo, steps []api.ChecklistItem, haveSteps bo
 			add(" " + styFaint.Render("no steps yet · c adds one"))
 		} else {
 			add(v.checklist.render(w, func(i int, sel bool) string {
-				return v.stepRow(steps[i], sel && m.focus == focusChecklist, w-1)
-			}))
+				tick := func(bool) tea.Cmd { return v.clickStepMark(i) }
+				return v.stepRow(steps[i], sel && m.focus == focusChecklist, w-1, tick)
+			}, v.clickStep))
 		}
 	}
 
@@ -1188,7 +1202,7 @@ func (v *todosView) previewChecklist(t api.Todo, w, rows int) []string {
 		show = max(room-1, 0)
 	}
 	for _, s := range k.items[:show] {
-		out = append(out, v.stepRow(s, false, w-1))
+		out = append(out, v.stepRow(s, false, w-1, nil))
 	}
 	if more := len(k.items) - show; more > 0 && room > 0 {
 		out = append(out, " "+styFaint.Render(fmt.Sprintf("+%d more · enter opens the todo", more)))
@@ -1196,7 +1210,7 @@ func (v *todosView) previewChecklist(t api.Todo, w, rows int) []string {
 	return out
 }
 
-func (v *todosView) stepRow(s api.ChecklistItem, sel bool, w int) string {
+func (v *todosView) stepRow(s api.ChecklistItem, sel bool, w int, tick func(bool) tea.Cmd) string {
 	base := lipgloss.NewStyle()
 	bar := " "
 	if sel {
@@ -1208,6 +1222,9 @@ func (v *todosView) stepRow(s api.ChecklistItem, sel bool, w int) string {
 	if s.Completed() {
 		mark = base.Foreground(colGreen).Render("☑")
 		text = base.Foreground(colFaint).Strikethrough(true)
+	}
+	if tick != nil {
+		mark = clickable(mark, tick)
 	}
 	title := truncate(s.Title, max(w-4, 4))
 	row := bar + mark + base.Render(" ") + text.Render(title)

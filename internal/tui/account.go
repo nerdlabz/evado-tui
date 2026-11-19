@@ -515,7 +515,9 @@ func (v *accountView) view(width, height int) string {
 		case row.key == "delete":
 			base = lipgloss.NewStyle().Foreground(colRed)
 		}
-		lines = append(lines, bar+base.Render(padTo(" "+truncate(row.label, menuW-6), menuW-3)))
+		lines = append(lines, clickable(bar+base.Render(padTo(" "+truncate(row.label, menuW-6), menuW-3)), func(double bool) tea.Cmd {
+			return v.clickRow(i, double)
+		}))
 	}
 	// On a short terminal the menu scrolls so the selected row stays in view.
 	if innerH > 0 && len(lines) > innerH {
@@ -536,7 +538,7 @@ func (v *accountView) view(width, height int) string {
 	detailW := width - menuW
 	detail := lipgloss.NewStyle().Padding(1, 2).Render(v.detailView(max(detailW-6, 20)))
 	return joinPanes(
-		frame(strings.Join(lines, "\n"), menuW, height, frameOpts{title: "Account", focused: true}),
+		scrollable(frame(strings.Join(lines, "\n"), menuW, height, frameOpts{title: "Account", focused: true}), m.wheelKeys),
 		frame(detail, detailW, height, frameOpts{title: v.selected().label, foot: styMuted.Render(who)}),
 	)
 }
@@ -832,3 +834,14 @@ func (v *accountView) footer() []helpEntry {
 const smartDatesExplanation = "Helps with dates and times that plain rules miss. \"Visit Tomorrow Land\" keeps its name. \"Dentist at 9\" means morning, and \"dinner at 7\" means evening."
 
 const smartDatesDisclosure = "Off by default. When enabled, todo text containing a date or time goes to a decision model, along with the day and time you wrote it. Nothing else about you is sent. When disabled, nothing is sent to the model."
+
+func (v *accountView) clickRow(i int, double bool) tea.Cmd {
+	if i >= len(v.menu()) {
+		return nil
+	}
+	v.sel = i
+	if double {
+		return v.m.pressKey("enter")
+	}
+	return nil
+}

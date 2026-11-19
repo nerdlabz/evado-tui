@@ -568,13 +568,13 @@ func (f *form) view() string {
 	// one that does not fit so the window has no gaps. The first one is
 	// drawn even when it is too tall, so the window is never empty.
 	pos, shown := 0, 0
-	for _, fl := range f.fields {
+	for i, fl := range f.fields {
 		h := f.fieldHeight(fl)
 		if pos >= f.offset {
 			if shown > 0 && shown+h > avail+1 {
 				break
 			}
-			b.WriteString(f.fieldView(fl))
+			b.WriteString(f.clickableField(i, f.fieldView(fl)))
 			shown += h
 		}
 		pos += h
@@ -598,13 +598,46 @@ func (f *form) view() string {
 	}
 	b.WriteString(styFaint.Render(saveHint + " · esc cancel · tab next field"))
 	b.WriteString("\n")
-	b.WriteString(styPill.Render("  save  ") + " " + styFaint.Render(saveKey))
+	b.WriteString(keyed("ctrl+s", styPill.Render("  save  ")) + " " + styFaint.Render(saveKey))
 	b.WriteString("     ")
-	b.WriteString(lipgloss.NewStyle().Foreground(colMuted).Background(colPanel).Render("  cancel  ") + " " + styFaint.Render("esc"))
+	b.WriteString(keyed("esc", lipgloss.NewStyle().Foreground(colMuted).Background(colPanel).Render("  cancel  ")) + " " + styFaint.Render("esc"))
 
 	w := max(lipgloss.Width(b.String()), min(f.innerWidth(), 56))
 	body := lipgloss.NewStyle().Width(w).Render(b.String())
-	return styBox.Render(body)
+	return scrollable(styBox.Render(body), func(delta int) tea.Cmd {
+		f.move(delta)
+		return nil
+	})
+}
+
+func (f *form) clickableField(i int, view string) string {
+	if f.fields[i].static() {
+		return view
+	}
+	body := strings.TrimRight(view, "\n")
+	return clickable(body, func(bool) tea.Cmd {
+		f.focusOn(i)
+		return nil
+	}) + view[len(body):]
+}
+
+func (f *form) focusOn(i int) {
+	if i < 0 || i >= len(f.fields) || f.fields[i].static() {
+		return
+	}
+	f.focus = i
+	f.focusField()
+	f.scrollToFocus()
+}
+
+func (f *form) choose(fl *formField, option string) tea.Cmd {
+	for i, o := range f.fields {
+		if o == fl {
+			f.focusOn(i)
+		}
+	}
+	fl.value = option
+	return nil
 }
 
 // labelWidth is the width of the longest label, so the fields line up.
@@ -680,19 +713,26 @@ func (f *form) choiceView(fl *formField, active bool, width int) string {
 	parts := make([]string, 0, len(fl.options))
 	total, at := 0, 0
 	for i, o := range fl.options {
+		part := styFaint.Render(" " + o + " ")
 		if o == fl.value {
 			at = i
-			parts = append(parts, chosen.Render(" "+o+" "))
-		} else {
-			parts = append(parts, styFaint.Render(" "+o+" "))
+			part = chosen.Render(" " + o + " ")
 		}
+		parts = append(parts, clickable(part, func(bool) tea.Cmd { return f.choose(fl, o) }))
 		total += len(o) + 3
 	}
 	if total <= width {
 		return strings.Join(parts, " ")
 	}
-	return styFaint.Render("‹ ") + chosen.Render(" "+truncate(fl.value, max(width-16, 4))+" ") +
-		styFaint.Render(fmt.Sprintf(" ›  %d of %d", at+1, len(fl.options)))
+	step := func(d int) func(bool) tea.Cmd {
+		return func(bool) tea.Cmd {
+			f.choose(fl, fl.value)
+			f.cycle(d)
+			return nil
+		}
+	}
+	return clickable(styFaint.Render("‹ "), step(-1)) + chosen.Render(" "+truncate(fl.value, max(width-16, 4))+" ") +
+		clickable(styFaint.Render(" ›"), step(1)) + styFaint.Render(fmt.Sprintf("  %d of %d", at+1, len(fl.options)))
 }
 
 // result collects the field values under their labels.

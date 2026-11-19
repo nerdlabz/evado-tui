@@ -392,7 +392,7 @@ func (v *inboxView) view(width, height int) string {
 	if !framed(width, height) {
 		return v.body(width, height)
 	}
-	return frame(v.body(width-2, height-2), width, height, frameOpts{title: "Invitations", foot: v.summary(), focused: true})
+	return scrollable(frame(v.body(width-2, height-2), width, height, frameOpts{title: "Invitations", foot: v.summary(), focused: true}), v.m.wheelKeys)
 }
 
 // body is what goes inside the frame, width and height being its own.
@@ -413,7 +413,7 @@ func (v *inboxView) body(width, height int) string {
 		lines = append(lines, "")
 		lines = append(lines, wrap(styMuted, "This computer keeps its todos to itself, so nobody has an account here to invite. "+
 			"Sign in and the invitations people send you will show up here.")...)
-		lines = append(lines, "", " "+styKey.Render("s")+styFaint.Render(" sign in   ")+styKey.Render("esc")+styFaint.Render(" back to lists"))
+		lines = append(lines, "", " "+keyed("s", styKey.Render("s")+styFaint.Render(" sign in"))+"   "+keyed("esc", styKey.Render("esc")+styFaint.Render(" back to lists")))
 		return strings.Join(lines, "\n")
 	case v.unavailable:
 		lines := []string{""}
@@ -424,7 +424,7 @@ func (v *inboxView) body(width, height int) string {
 	case !v.loaded && v.err != nil:
 		lines := []string{""}
 		lines = append(lines, wrap(styErr, "Could not load your invitations: "+errText(v.err))...)
-		lines = append(lines, "", " "+styKey.Render("r")+styFaint.Render(" try again"))
+		lines = append(lines, "", " "+keyed("r", styKey.Render("r")+styFaint.Render(" try again")))
 		return strings.Join(lines, "\n")
 	case !v.loaded:
 		return "\n " + styAccent.Render(m.spinner()) + " " + styMuted.Render("loading invitations")
@@ -455,7 +455,11 @@ func (v *inboxView) body(width, height int) string {
 	// What is left after the notes is the room the rows have.
 	v.rows.setHeight(max(height-len(head)-len(tail), 1))
 	v.rows.setItems(len(v.items))
-	list := v.rows.render(inner, func(i int, sel bool) string { return v.row(v.items[i], sel, inner-1) })
+	list := v.rows.render(inner, func(i int, sel bool) string { return v.row(v.items[i], sel, inner-1) }, func(i int, _ bool) tea.Cmd {
+		v.rows.cursor = i
+		v.rows.clamp()
+		return nil
+	})
 	out := append(head, list)
 	return strings.Join(append(out, tail...), "\n")
 }
