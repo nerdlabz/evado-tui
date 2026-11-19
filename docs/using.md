@@ -195,7 +195,12 @@ parse` says the same and `-passed kept` or `-passed moved` chooses.
 
 An account reads a date written in numbers month first or day first (3/4 is
 March 4 or 3 April), as its `dateOrder` says, and the local reader follows the
-account. Without an account it reads month first.
+account. Without an account it follows the computer's time zone the way the
+service does for an account that has not chosen: month first in the United
+States, Canada, the Philippines, China, Taiwan, Japan and Korea, and day first
+everywhere else. Set `dateOrder` in `config.json` to pick one yourself; see
+[configuration](configuration.md#the-config-file). Dates written in words read
+the same either way.
 
 ## The Todos tab
 

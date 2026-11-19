@@ -217,6 +217,7 @@ func (m *Model) openBackend() {
 		m.backend, m.startupErr = nil, err
 		return
 	}
+	m.backend.PreferDateOrder(m.cfg.DateOrder)
 	m.client = m.backend.Client()
 	removeLegacyCache()
 }

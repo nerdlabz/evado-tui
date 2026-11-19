@@ -57,6 +57,10 @@ type Config struct {
 	// the right does, for example {"J": "j"}. It applies to the main views,
 	// never to text entry.
 	Keys map[string]string `json:"keys,omitempty"`
+	// DateOrder is "mdy" or "dmy": how a date written in numbers reads
+	// without an account, where 3/4 is March 4 or 3 April. An account's own
+	// choice wins, and when this is empty the time zone decides.
+	DateOrder string `json:"dateOrder,omitempty"`
 }
 
 // Polling bounds. Ten minutes keeps a long-open session fresh without

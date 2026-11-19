@@ -99,7 +99,7 @@ func (b *Backend) reading(line string, fromService map[string]Parsed, timePassed
 	if p, ok := fromService[line]; ok {
 		return p
 	}
-	return ParseWith(line, b.loc(), b.now(), Options{TimePassed: timePassed, DateOrder: b.st.User.DateOrder})
+	return ParseWith(line, b.loc(), b.now(), Options{TimePassed: timePassed, DateOrder: b.readDateOrder()})
 }
 
 // passedChoice is whether a request's timePassed is one the service takes:

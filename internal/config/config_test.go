@@ -301,3 +301,20 @@ func TestLoadMigratesLegacyServer(t *testing.T) {
 		t.Errorf("token lost: %q", c.Token)
 	}
 }
+
+func TestDateOrderIsReadFromTheFileAndSurvivesSavePrefs(t *testing.T) {
+	dir := withTempConfig(t)
+	if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(`{"dateOrder":"dmy"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load()
+	if err != nil || got.DateOrder != "dmy" {
+		t.Fatalf("Load = %+v, %v; want dateOrder dmy", got, err)
+	}
+	if err := (Config{Status: "today"}).SavePrefs(); err != nil {
+		t.Fatalf("SavePrefs: %v", err)
+	}
+	if got, _ := Load(); got.DateOrder != "dmy" {
+		t.Errorf("dateOrder after SavePrefs = %q; want dmy", got.DateOrder)
+	}
+}
