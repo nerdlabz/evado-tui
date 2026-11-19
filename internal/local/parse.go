@@ -1264,6 +1264,25 @@ func ValidRule(s string) bool {
 	return ok
 }
 
+// RuleInWords says a recurrence rule the way a person would: 2:week:1 is
+// "every 2 weeks on Monday". A rule that cannot be read is given back as it
+// is, so that it is at least shown.
+func RuleInWords(s string) string {
+	r, ok := parseRule(s)
+	if !ok {
+		return s
+	}
+	out := "every " + r.unit
+	if r.interval > 1 {
+		out = fmt.Sprintf("every %d %ss", r.interval, r.unit)
+	}
+	if r.weekday > 0 {
+		// The rule counts Monday as 1 and Sunday as 7.
+		out += " on " + time.Weekday(r.weekday%7).String()
+	}
+	return out
+}
+
 func parseRule(s string) (rule, bool) {
 	parts := strings.Split(s, ":")
 	if len(parts) < 2 || len(parts) > 3 {

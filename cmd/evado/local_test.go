@@ -226,3 +226,21 @@ func TestPassedTimesOnThisComputer(t *testing.T) {
 		}
 	}
 }
+
+// parse says that a todo repeats, in words, and says nothing of it for one
+// that does not.
+func TestParseSaysHowATodoRepeats(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "todos.json")
+	out, err := runLocal(t, path, "parse", "Gym every other monday")
+	if err != nil || !strings.Contains(out, "title   Gym\n") || !strings.Contains(out, "repeat  every 2 weeks on Monday\n") {
+		t.Errorf("parse: %q, %v; want the repeat in words", out, err)
+	}
+	out, err = runLocal(t, path, "parse", "Stretch daily at 9am")
+	if err != nil || !strings.Contains(out, "repeat  every day\n") {
+		t.Errorf("parse: %q, %v; want every day", out, err)
+	}
+	out, err = runLocal(t, path, "parse", "Gym monday")
+	if err != nil || strings.Contains(out, "repeat") {
+		t.Errorf("parse of a todo that does not repeat: %q, %v; want no repeat line", out, err)
+	}
+}

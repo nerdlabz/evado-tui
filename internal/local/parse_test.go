@@ -251,3 +251,24 @@ func TestNextOccurrence(t *testing.T) {
 		}
 	}
 }
+
+func TestRuleInWords(t *testing.T) {
+	for rule, want := range map[string]string{
+		"1:day":    "every day",
+		"4:day":    "every 4 days",
+		"1:week":   "every week",
+		"1:week:3": "every week on Wednesday",
+		"2:week:1": "every 2 weeks on Monday",
+		"1:week:7": "every week on Sunday",
+		"3:month":  "every 3 months",
+		"1:year":   "every year",
+		// What cannot be read is shown as it came.
+		"0:day":       "0:day",
+		"1:fortnight": "1:fortnight",
+		"":            "",
+	} {
+		if got := RuleInWords(rule); got != want {
+			t.Errorf("RuleInWords(%q) = %q, want %q", rule, got, want)
+		}
+	}
+}
