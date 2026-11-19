@@ -6,10 +6,12 @@
 
 <!-- Commands you ran, and anything you checked by hand in the TUI or CLI. -->
 
+- [ ] A maintainer replied on the issue before I started (not needed for typo fixes)
+- [ ] I read every line of this change and ran it myself
 - [ ] `mise run check` and `mise run test` pass
 - [ ] Tests cover the change, or it only touches docs
 - [ ] The docs (README, `docs/`, AGENTS.md) are updated if a command, flag, key or output changed
 
-## Tools used (optional)
+## Tools used
 
-<!-- If an AI tool helped with this change, you can say which tool and model here. -->
+<!-- Which AI tool and model helped with this change, or "none". Required: see CONTRIBUTING.md. -->

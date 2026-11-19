@@ -2,9 +2,17 @@
 
 Thanks for helping. Bug reports, ideas, docs fixes and code are all welcome.
 
-For anything bigger than a small fix, please open an issue first so we can
-agree on the approach before you spend time on it. Issues labelled
-`good first issue` are a good place to start.
+## Before you write code
+
+Say so on the issue first, and wait for a maintainer to reply. That goes for
+small fixes too. If there is no issue for what you have in mind, open one.
+
+A pull request that arrives without that exchange is closed without review,
+however good it is. Two reasons: it stops two people doing the same work, and
+it tells us there is a person on the other end who will still be there when
+the review has questions.
+
+Typo and wording fixes to the docs are the exception. Send those straight in.
 
 ## Getting set up
 
@@ -45,12 +53,16 @@ now: what changed and why.
 
 ## Using AI tools
 
-You're welcome to use AI tools to help with a contribution. We hold the result
-to the same standard as anything else, and ask for a few things:
+You're welcome to use AI tools to help with a contribution. We use them too.
+What we don't take is work nobody is behind: an agent pointed at an issue list,
+opening pull requests on its own. We hold the result to the same standard as
+anything else, and ask for a few things:
 
 - **A person opens every issue and pull request**, from their own account, and
-  answers review comments. Issues or pull requests opened by an agent or bot
-  on its own will be closed.
+  answers review comments in their own words. Issues or pull requests opened
+  by an agent or bot on its own will be closed, and the account may be blocked.
+- **Say what you used.** The pull request template asks which AI tool and
+  model helped, if any. "None" is a fine answer. Leaving it blank is not.
 - **Use a current frontier model.** Output from small or older models tends to
   look plausible and be wrong in ways that take longer to review than to
   write.
@@ -59,12 +71,12 @@ to the same standard as anything else, and ask for a few things:
   isn't ready.
 - **Report what you saw.** In an issue, describe what happened on your machine.
   Please don't paste an AI's analysis you haven't checked.
-- **Leave tool attribution out of commits and PR descriptions.** If you'd like
-  to mention that a tool helped, the pull request template has an optional
-  place for it.
+- **Leave tool attribution out of commit messages.** The pull request
+  template is the place for it.
 
-Pull requests that look unreviewed, large and unexplained, or unrelated to an
-issue may be closed without a detailed review.
+Pull requests that look unreviewed, large and unexplained, unrelated to an
+issue, or opened minutes after forking with no word on the issue may be closed
+without a detailed review.
 
 ## Reporting bugs
 
