@@ -75,6 +75,7 @@ func (v *accountView) baseMenu() []accountRow {
 			{key: "channels", label: "Notification channels", sessionOnly: true},
 			{key: "delete", label: "Delete account", sessionOnly: true},
 			{key: "computer", group: "this computer", label: "Connection"},
+			{key: "mouse", label: "Mouse"},
 			{key: "signout", label: "Sign out"},
 		}
 	}
@@ -87,6 +88,7 @@ func (v *accountView) baseMenu() []accountRow {
 		{key: "tokens", group: "web app only", label: "API tokens", sessionOnly: true},
 		{key: "channels", label: "Notification channels", sessionOnly: true},
 		{key: "computer", group: "this computer", label: "Connection"},
+		{key: "mouse", label: "Mouse"},
 		{key: "signout", label: "Sign out"},
 		{key: "delete", group: "danger zone", label: "Delete account"},
 	}
@@ -218,6 +220,10 @@ func (v *accountView) onKey(m *Model, msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "signout":
 		if k == "enter" {
 			return m, v.confirmSignOut(m)
+		}
+	case "mouse":
+		if k == "enter" || k == " " {
+			return m, m.toggleMouse()
 		}
 	case "computer":
 		switch k {
@@ -576,6 +582,12 @@ func (v *accountView) detailView(width int) string {
 		b.WriteString(v.signOutView(width))
 	case "computer":
 		b.WriteString(v.computerView(m, width))
+	case "mouse":
+		state, next := "off", "on"
+		if m.cfg.Mouse {
+			state, next = "on", "off"
+		}
+		b.WriteString("Mouse: " + state + "\n\n" + paneNote(mouseExplanation, width) + "\n\n" + styFaint.Render("enter turns it "+next))
 	case "import":
 		b.WriteString(paneNote("Import an Evado export. Press enter to choose its file and preview. Existing todos and pending deletions are kept.", width))
 		if v.imported != nil {

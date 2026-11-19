@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -292,4 +293,34 @@ func TestClickingTheWaysToSignIn(t *testing.T) {
 	if !strings.Contains(h.view(), "evt_") {
 		t.Errorf("a click should open the token step:\n%s", h.view())
 	}
+}
+
+func TestTurningTheMouseOnAndOffInTheApp(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	t.Setenv("EVADO_CONFIG", path)
+	h := newHarness(t, sampleAPI())
+
+	h.press(":")
+	for _, r := range "mouse" {
+		h.press(string(r))
+	}
+	h.press("enter")
+	if !h.model.cfg.Mouse {
+		t.Fatal("the palette entry should turn the mouse on")
+	}
+	if saved, err := config.Load(); err != nil || !saved.Mouse {
+		t.Errorf("turning the mouse on should be saved, got %v, %v", saved.Mouse, err)
+	}
+
+	h.click("Account")
+	h.click("Mouse")
+	h.mustContain("Mouse: on")
+	h.press("enter")
+	if h.model.cfg.Mouse {
+		t.Fatal("enter on the Mouse section should turn it off")
+	}
+	if saved, err := config.Load(); err != nil || saved.Mouse {
+		t.Errorf("turning the mouse off should be saved, got %v, %v", saved.Mouse, err)
+	}
+	h.mustContain("Mouse: off")
 }

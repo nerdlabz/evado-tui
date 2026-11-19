@@ -72,7 +72,8 @@ settings:
   click beside the command palette, the theme picker or the help closes it.
   It is off by default because capturing the mouse stops the terminal
   selecting text; most terminals still select while Shift (Option in
-  iTerm2 and Terminal.app) is held.
+  iTerm2 and Terminal.app) is held. Account, Mouse, or "Turn the mouse on or off" in
+  the command palette, switches it without a restart and saves the choice.
 - `keys` remaps keys in the main views: pressing the key on the left does
   what the key on the right does. Names are single characters, `space`,
   `enter`, `esc`, `tab`, arrows, `pgup`/`pgdown`, `home`/`end` and
