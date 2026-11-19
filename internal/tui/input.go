@@ -8,6 +8,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/nerdlabz/evado-tui/internal/config"
 )
 
 // -- key remapping ----------------------------------------------------------
@@ -60,6 +62,25 @@ func remapKey(keys map[string]string, msg tea.KeyMsg) tea.KeyMsg {
 }
 
 // -- mouse ------------------------------------------------------------------
+
+const mouseExplanation = "With the mouse on, a click selects what it lands on, a double click opens it, " +
+	"and the wheel scrolls the pane under the pointer. While it is on the terminal cannot select text " +
+	"the usual way; most terminals still select while Shift, or Option in iTerm2 and Terminal.app, is held."
+
+// toggleMouse switches mouse reporting on the running terminal as well as
+// in the config, so the choice needs no restart and outlasts this run.
+func (m *Model) toggleMouse() tea.Cmd {
+	m.cfg.Mouse = !m.cfg.Mouse
+	m.zones = nil
+	reporting, state := tea.DisableMouse, "off"
+	if m.cfg.Mouse {
+		reporting, state = tea.EnableMouseCellMotion, "on"
+	}
+	if err := config.SaveMouse(m.cfg.Mouse); err != nil {
+		return tea.Batch(reporting, m.warnf("mouse %s, but not saved: %s", state, errText(err)))
+	}
+	return tea.Batch(reporting, m.okf("mouse %s", state))
+}
 
 // clickAt is a mouse click, kept to recognise a double click.
 type clickAt struct {

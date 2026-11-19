@@ -25,7 +25,8 @@ type paletteEntry struct {
 	// key is pressed.
 	row string
 	// run, when set, is what the entry does instead of pressing a key. It is
-	// for the entries made on the spot, such as one for each saved view.
+	// for what no key does, such as opening one saved view or switching the
+	// mouse.
 	run func(m *Model) tea.Cmd
 }
 
@@ -90,6 +91,7 @@ var paletteEntries = []paletteEntry{
 	{title: "Go to Sync", tab: anyTab, key: "3"},
 	{title: "Go to Account", tab: anyTab, key: "4"},
 	{title: "Choose a theme", tab: anyTab, key: "ctrl+t"},
+	{title: "Turn the mouse on or off", tab: anyTab, run: (*Model).toggleMouse},
 	{title: "Refresh everything from the server", tab: anyTab, key: "r"},
 	{title: "Show all keys", tab: anyTab, key: "?"},
 	{title: "Quit", tab: anyTab, key: "q"},

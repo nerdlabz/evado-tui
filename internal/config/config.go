@@ -111,6 +111,16 @@ func SaveTheme(name string) error {
 	return disk.Save()
 }
 
+// SaveMouse writes only the mouse setting, as SaveTheme does the theme.
+func SaveMouse(on bool) error {
+	disk, err := Load()
+	if err != nil {
+		return err
+	}
+	disk.Mouse = on
+	return disk.Save()
+}
+
 // Path returns the config file path. EVADO_CONFIG overrides it, which is
 // handy for testing and for throwaway profiles.
 func Path() (string, error) {

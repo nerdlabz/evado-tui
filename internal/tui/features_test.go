@@ -727,6 +727,9 @@ func TestPaletteEscAndEmptyResult(t *testing.T) {
 
 func TestEveryPaletteEntryHasAKey(t *testing.T) {
 	for _, e := range paletteEntries {
+		if e.run != nil {
+			continue
+		}
 		if _, ok := parseKey(e.key); !ok {
 			t.Errorf("%q: %q is not a key the palette can press", e.title, e.key)
 		}
