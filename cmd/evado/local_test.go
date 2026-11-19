@@ -244,3 +244,35 @@ func TestParseSaysHowATodoRepeats(t *testing.T) {
 		t.Errorf("parse of a todo that does not repeat: %q, %v; want no repeat line", out, err)
 	}
 }
+
+// With -local there is no account to say how 3/4 reads, so the config's
+// dateOrder does, and the time zone does when it has none.
+func TestParseOnThisComputerReadsNumericDatesByConfigOrZone(t *testing.T) {
+	for _, c := range []struct {
+		name, tz, order, want string
+	}{
+		{"a European zone reads day first", "Europe/Madrid", "", "-06-05"},
+		{"a US zone reads month first", "America/New_York", "", "-05-06"},
+		{"dateOrder beats the zone", "America/New_York", "dmy", "-06-05"},
+		{"dateOrder month first in a European zone", "Europe/Madrid", "mdy", "-05-06"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Setenv("EVADO_CONFIG", filepath.Join(dir, "config.json"))
+			t.Setenv("TZ", c.tz)
+			cfg := config.Config{DateOrder: c.order}
+			cl, err := commandClient(cfg, []string{"parse", "x"}, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var out bytes.Buffer
+			args := []string{"parse", "-json", "Dentist 5/6"}
+			if err := runCommand(context.Background(), ops.New(cl), args, &out, nil, true); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(out.String(), c.want+"T00:00:00") {
+				t.Errorf("5/6 read as %s; want a day with %s", out.String(), c.want)
+			}
+		})
+	}
+}

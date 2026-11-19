@@ -49,6 +49,10 @@ type Backend struct {
 	lastErr error
 	now     func() time.Time
 
+	// dateOrder is the configured order for numeric dates, used when the
+	// account gives none; see readDateOrder.
+	dateOrder string
+
 	// awaiting is each edit the running sync pushed, as it was sent, until a
 	// pull shows whether the service applied it; see settle. pushes counts
 	// how often it pushed each todo.

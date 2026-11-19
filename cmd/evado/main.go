@@ -274,6 +274,7 @@ func commandClient(cfg config.Config, args []string, onLocal bool) (*api.Client,
 	if err != nil {
 		return nil, err
 	}
+	b.PreferDateOrder(cfg.DateOrder)
 	return b.Client(), nil
 }
 

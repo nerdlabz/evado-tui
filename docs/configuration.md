@@ -44,6 +44,7 @@ settings:
   "theme": "auto",
   "mouse": false,
   "noCache": false,
+  "dateOrder": "dmy",
   "keys": { "J": "j", "K": "k" }
 }
 ```
@@ -54,6 +55,12 @@ settings:
   request is running, and a refresh never shows the busy indicator.
 - `noCache` keeps no todos on this computer. The TUI then talks straight to
   the server and needs a connection for everything; see [sync](sync.md).
+- `dateOrder` is `mdy` or `dmy`: how a date written in numbers reads without
+  an account, so `3/4` is March 4 or 3 April. Left out, it follows the
+  computer's time zone: month first in the United States, Canada, the
+  Philippines, China, Taiwan, Japan and Korea, day first everywhere else. An
+  account reads dates by its own setting instead, and any other value is
+  ignored.
 - `local` records that you chose to use the TUI without an account.
 - `theme` is `auto` to follow the terminal, `light` or `dark` to force the
   house palette, or a built-in theme: `evado`, `evado-light`, `catppuccin`,
