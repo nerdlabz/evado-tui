@@ -12,7 +12,7 @@ environment variables for when you want to change something.
 | `-server` | point at a different API root, such as a test server |
 | `-check` | verify the token and print the account, then exit |
 | `-poll` | seconds between background refreshes, at least 120, default 600 |
-| `-mouse` | turn on wheel scrolling and click-to-select |
+| `-mouse` | turn on the mouse: click, double click and scroll |
 | `-no-cache` | keep no todos on this computer: talk straight to the server, online only |
 | `-local` | commands only: use the todos kept on this computer instead of the server |
 | `-theme` | `auto`, `light`, `dark`, or a theme name such as `tokyonight` |
@@ -63,9 +63,16 @@ settings:
   board and with its sidebar folded away.
 - `savedViews` holds the views you saved, in one set for each server and
   account, and one for use without an account. See [saved views](using.md#saved-views).
-- `mouse` turns on wheel scrolling, click to select a todo, double click to
-  open it, and click on a tab or a sidebar entry. It is off by default because capturing the
-  mouse stops the terminal selecting text.
+- `mouse` turns on the mouse. A click selects whatever it lands on: a tab,
+  a sidebar entry, a todo, a board card, a step, a list, a change, an
+  account section, or a field or option in a dialog. A double click opens a
+  todo, shows a list's todos, or runs an account section. A click on a
+  circle or a step's box completes it, a click on a key hint in the footer
+  presses that key, and the wheel scrolls whatever is under the pointer. A
+  click beside the command palette, the theme picker or the help closes it.
+  It is off by default because capturing the mouse stops the terminal
+  selecting text; most terminals still select while Shift (Option in
+  iTerm2 and Terminal.app) is held.
 - `keys` remaps keys in the main views: pressing the key on the left does
   what the key on the right does. Names are single characters, `space`,
   `enter`, `esc`, `tab`, arrows, `pgup`/`pgdown`, `home`/`end` and
