@@ -310,19 +310,23 @@ func (v *listsView) view(width, height int) string {
 		v.unsynced = m.backend.Unsynced()
 	}
 	if !framed(width, height) {
-		return v.rows.render(width, func(i int, sel bool) string { return v.row(i, sel, width-1) })
+		return v.rows.render(width, func(i int, sel bool) string { return v.row(i, sel, width-1) }, v.clickList)
 	}
 	l := v.layout(width, height)
 	v.rows.setHeight(max(l.leftH-2, 1))
 	left := frame(v.rows.render(l.leftW-2, func(i int, sel bool) string {
 		return v.row(i, sel, l.leftW-3)
-	}), l.leftW, l.leftH, frameOpts{title: "Lists", foot: v.summary(), focused: m.focus != focusMembers})
+	}, v.clickList), l.leftW, l.leftH, frameOpts{title: "Lists", foot: v.summary(), focused: m.focus != focusMembers})
+	left = scrollable(left, func(delta int) tea.Cmd {
+		m.focus = focusList
+		return m.wheelKeys(delta)
+	})
 
 	title := "List"
 	if sel := v.selected(); sel != nil {
 		title = sel.Name
 	}
-	right := frame(v.detailBody(l.detailW-2), l.detailW, l.detailH, frameOpts{title: title, focused: m.focus == focusMembers})
+	right := scrollable(frame(v.detailBody(l.detailW-2), l.detailW, l.detailH, frameOpts{title: title, focused: m.focus == focusMembers}), v.wheelMembers)
 	if l.leftW == width {
 		return left + "\n" + right
 	}
@@ -479,14 +483,14 @@ func (v *listsView) detailLines(width int) ([]string, int) {
 		v.memberRows.setItems(len(v.members))
 		add(v.memberRows.render(width, func(i int, sel bool) string {
 			return v.memberRow(v.members[i], sel && active, width-1)
-		}))
+		}, v.clickMember))
 	} else {
-		add("", " "+label("members"), " "+styFaint.Render("m shows who is in this list"))
+		add("", " "+label("members"), " "+keyed("m", styFaint.Render("m shows who is in this list")))
 	}
 
 	if v.invite != nil {
 		add("", " "+label("invite link · shown once"),
-			" "+styOK.Render(truncate(v.invite.InviteURL, tw)),
+			" "+keyed("y", styOK.Render(truncate(v.invite.InviteURL, tw))),
 			" "+styFaint.Render(fmt.Sprintf("valid for %dh · y copies again", v.invite.ExpiresIn/3600)))
 	}
 	add("", " "+styFaint.Render(shortID(l.ID)))
@@ -544,4 +548,31 @@ func (v *listsView) footer() []helpEntry {
 		{"J", "join"},
 		{"t", "show in todos"},
 	}
+}
+
+func (v *listsView) clickList(i int, double bool) tea.Cmd {
+	m := v.m
+	m.focus = focusList
+	v.rows.cursor = i
+	v.rows.clamp()
+	if double {
+		return m.pressKey("t")
+	}
+	return nil
+}
+
+func (v *listsView) clickMember(i int, _ bool) tea.Cmd {
+	v.m.focus = focusMembers
+	v.memberRows.cursor = i
+	v.memberRows.clamp()
+	return nil
+}
+
+func (v *listsView) wheelMembers(delta int) tea.Cmd {
+	if !v.showMembers || len(v.members) == 0 {
+		return nil
+	}
+	v.m.focus = focusMembers
+	v.memberRows.setItems(len(v.members))
+	return v.m.wheelKeys(delta)
 }

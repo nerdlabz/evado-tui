@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 )
@@ -53,6 +54,18 @@ func (m *Model) bodyHeight() int {
 }
 
 func (m *Model) View() string {
+	if !m.cfg.Mouse {
+		return m.draw()
+	}
+	zs := &zones{press: m.pressKey}
+	drawing = zs
+	screen := m.draw()
+	drawing = nil
+	m.zones = zs
+	return zs.place(screen)
+}
+
+func (m *Model) draw() string {
 	if m.width == 0 {
 		return "starting evado…"
 	}
@@ -120,8 +133,12 @@ func (m *Model) withToast(screen string) string {
 		BorderForeground(t.color()).
 		Padding(0, 1).
 		Render(text)
-	w := lipgloss.Width(box)
-	return overlayAt(screen, box, max(m.width-w-1, 0), max(m.height-footerRows-lipgloss.Height(box), 0), w)
+	w, h := lipgloss.Width(box), lipgloss.Height(box)
+	box = clickable(box, func(bool) tea.Cmd {
+		m.toast = nil
+		return nil
+	})
+	return overlayAt(screen, box, max(m.width-w-1, 0), max(m.height-footerRows-h, 0), w)
 }
 
 // withOverlay draws the active modal on top of the finished screen, so a
@@ -139,12 +156,20 @@ func (m *Model) withOverlay(screen string) string {
 	case layerThemes:
 		modal = m.themes.view()
 	case layerHelp:
-		modal = styBox.Render(m.help.view())
+		modal = scrollable(styBox.Render(m.help.view()), m.help.scroll)
 	}
 	if modal == "" {
 		return screen
 	}
-	return overlay(dim(screen), modal, m.width, m.height)
+	// A click on the dialog stays there, and one beside a menu closes it.
+	// A form or a question is not dismissed by a stray click.
+	modal = clickable(modal, func(bool) tea.Cmd { return nil })
+	behind := dim(screen)
+	switch m.layer {
+	case layerPalette, layerThemes, layerHelp:
+		behind = keyed("esc", behind)
+	}
+	return overlay(behind, modal, m.width, m.height)
 }
 
 // dim redraws a screen in the faintest colour.
@@ -189,24 +214,15 @@ func (m *Model) spinner() string {
 // brandMark is the wordmark at the start of the header.
 const brandMark = " ◆ evado "
 
-// tabX is the column a tab's label starts at, for drawing and for clicks.
-func tabX(t tab) int {
-	x := visibleWidth(brandMark) + 1
-	for i := 0; i < int(t); i++ {
-		x += len(tabNames[i]) + 3
-	}
-	return x
-}
-
 func (m *Model) headerView() string {
 	var b strings.Builder
 	b.WriteString(brandGradient(brandMark) + " ")
 	for i, name := range tabNames {
+		label := styMuted.Render(" " + name + " ")
 		if tab(i) == m.tab {
-			b.WriteString(styPill.Render(" " + name + " "))
-		} else {
-			b.WriteString(styMuted.Render(" " + name + " "))
+			label = styPill.Render(" " + name + " ")
 		}
+		b.WriteString(clickable(label, func(bool) tea.Cmd { return m.switchTab(tab(i)) }))
 		b.WriteString(" ")
 	}
 	left := b.String()
@@ -292,7 +308,8 @@ func (m *Model) footerView() string {
 	case tabAccount:
 		hints = m.acct.footer()
 	}
-	extra := styKey.Render(":") + styFaint.Render(" commands  ") + styKey.Render("?") + styFaint.Render(" help ")
+	extra := keyed(":", styKey.Render(":")+styFaint.Render(" commands")) + "  " +
+		keyed("?", styKey.Render("?")+styFaint.Render(" help")) + " "
 	return hstack(" "+hintLine(hints, max(m.width-visibleWidth(extra)-3, 0)), extra, m.width)
 }
 
@@ -313,7 +330,7 @@ func hintLine(hints []helpEntry, width int) string {
 		if used > 0 {
 			b.WriteString("  ")
 		}
-		b.WriteString(part)
+		b.WriteString(keyed(h.keys, part))
 		used += w
 	}
 	return b.String()

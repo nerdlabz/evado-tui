@@ -63,6 +63,12 @@ func (c *confirm) view() string {
 	if c.yes {
 		yes, no = on.Render("  yes  "), off.Render("  no  ")
 	}
+	press := pressing()
+	yes = clickable(yes, func(bool) tea.Cmd {
+		c.yes = true
+		return press("enter")
+	})
+	no = keyed("esc", no)
 	// Wrap first, then size the box to the wrapped result, so a long
 	// sentence cannot push the dialog off the screen.
 	inner := max(visibleWidth(c.body)+2, 44)
@@ -75,7 +81,7 @@ func (c *confirm) view() string {
 	wrap := func(s string) string { return strings.Join(wrapText(s, inner), "\n") }
 	body := lipgloss.NewStyle().Foreground(colMuted).Render(wrap(c.body))
 	if c.danger && c.armed {
-		body += "\n\n" + styErr.Bold(true).Render(wrap("press enter again to confirm"))
+		body += "\n\n" + styErr.Bold(true).Render(wrap("press enter or yes again to confirm"))
 	} else if c.danger {
 		body += "\n\n" + styFaint.Render(wrap("this cannot be undone"))
 	}
@@ -244,6 +250,12 @@ func (h *help) lines() []string {
 		blocks[i] = clipBlock(strings.Join(c, "\n"), colW, rows)
 	}
 	return strings.Split(joinPanes(blocks...), "\n")
+}
+
+func (h *help) scroll(delta int) tea.Cmd {
+	h.offset += delta * wheelStep
+	h.clamp()
+	return nil
 }
 
 func (h *help) view() string {

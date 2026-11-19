@@ -139,7 +139,8 @@ type Model struct {
 	undos   []undoEntry
 	undoing int
 	// muts sends the changes to each todo one at a time, in order.
-	muts mutations
+	muts  mutations
+	zones *zones
 	// lastClick is the previous mouse click, to tell a double click.
 	lastClick clickAt
 

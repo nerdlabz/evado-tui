@@ -75,7 +75,19 @@ func (m *Model) onThemeKey(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
+func (p *themePicker) pick(press func(string) tea.Cmd, i int, double bool) tea.Cmd {
+	if double {
+		return press("enter")
+	}
+	n := len(themeChoices())
+	for steps := (i - p.cursor + n) % n; steps > 0; steps-- {
+		press("down")
+	}
+	return nil
+}
+
 func (p *themePicker) view() string {
+	press := pressing()
 	lines := []string{styTitle.Render("Theme"), ""}
 	for i, name := range themeChoices() {
 		title := "Match the terminal"
@@ -90,8 +102,13 @@ func (p *themePicker) view() string {
 		if i == p.cursor {
 			row = styAccent.Render("▌") + stySel.Render(padTo(title, 20)+" ") + padTo(swatch, 12)
 		}
-		lines = append(lines, row)
+		lines = append(lines, clickable(row, func(double bool) tea.Cmd { return p.pick(press, i, double) }))
 	}
 	lines = append(lines, "", styFaint.Render("↑↓ try one · enter keep · esc cancel"))
-	return styBox.Render(strings.Join(lines, "\n"))
+	return scrollable(styBox.Render(strings.Join(lines, "\n")), func(delta int) tea.Cmd {
+		if delta < 0 {
+			return press("up")
+		}
+		return press("down")
+	})
 }

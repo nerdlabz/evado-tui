@@ -17,13 +17,13 @@ import (
 // of a colour code and never gains width from the codes themselves.
 func truncate(s string, w int) string {
 	if w <= 0 {
-		return ""
+		return zoneMarks(s)
 	}
 	if lipgloss.Width(s) <= w {
 		return s
 	}
 	if w == 1 {
-		return "…"
+		return "…" + zoneMarks(s)
 	}
 	var b strings.Builder
 	used := 0
@@ -37,7 +37,8 @@ func truncate(s string, w int) string {
 		size := decodeRune(s[i:])
 		rw := runeCells(s[i : i+size])
 		if used+rw > w-1 {
-			break
+			b.WriteString("…" + zoneMarks(s[i:]))
+			return b.String()
 		}
 		b.WriteString(s[i : i+size])
 		used += rw

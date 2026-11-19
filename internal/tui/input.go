@@ -69,126 +69,70 @@ type clickAt struct {
 
 const doubleClick = 400 * time.Millisecond
 
-// tabsRow is the screen row the tab strip is drawn on.
-const tabsRow = 0
+const wheelStep = 3
 
-// onMouse handles the wheel and clicks. Mouse reporting is opt-in, so this
-// only runs when the config asks for it.
 func (m *Model) onMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
-	if !m.cfg.Mouse || m.layer != layerNone || msg.Action != tea.MouseActionPress {
+	if !m.cfg.Mouse || msg.Action != tea.MouseActionPress {
 		return m, nil
 	}
+	hits := m.zones.at(msg.X, msg.Y)
 	switch msg.Button {
 	case tea.MouseButtonWheelUp, tea.MouseButtonWheelDown:
-		if m.focus != focusList {
-			return m, nil
-		}
-		key := tea.KeyMsg{Type: tea.KeyDown}
+		delta := 1
 		if msg.Button == tea.MouseButtonWheelUp {
-			key = tea.KeyMsg{Type: tea.KeyUp}
+			delta = -1
 		}
-		var cmds []tea.Cmd
-		for i := 0; i < 3; i++ {
-			_, c := m.onViewKey(key)
-			cmds = append(cmds, c)
+		for _, z := range hits {
+			if z.wheel != nil {
+				return m, z.wheel(delta)
+			}
 		}
-		return m, tea.Batch(cmds...)
 	case tea.MouseButtonLeft:
-		return m, m.onClick(msg.X, msg.Y)
+		again := m.lastClick.x == msg.X && m.lastClick.y == msg.Y && time.Since(m.lastClick.at) < doubleClick
+		m.lastClick = clickAt{x: msg.X, y: msg.Y, at: time.Now()}
+		if again {
+			// A third click starts a new pair rather than opening twice.
+			m.lastClick = clickAt{}
+		}
+		for _, z := range hits {
+			if z.click != nil {
+				return m, z.click(again)
+			}
+		}
 	}
 	return m, nil
 }
 
-func (m *Model) onClick(x, y int) tea.Cmd {
-	again := m.lastClick.x == x && m.lastClick.y == y && time.Since(m.lastClick.at) < doubleClick
-	m.lastClick = clickAt{x: x, y: y, at: time.Now()}
-
-	if y == tabsRow {
-		for i, name := range tabNames {
-			if at := tabX(tab(i)); x >= at && x < at+len(name)+2 {
-				return m.switchTab(tab(i))
-			}
-		}
-		return nil
-	}
-	if m.tab != tabTodos {
-		return nil
-	}
-	return m.todos.click(m, x, y-headerRows, again)
-}
-
-// click handles a press inside the Todos tab, at a position measured from
-// the top left of the view: a sidebar item is shown, and a todo is
-// selected, or opened on the second click.
-func (v *todosView) click(m *Model, x, y int, again bool) tea.Cmd {
-	l := v.layout(m.width, m.bodyHeight())
-	if x < l.sideW {
-		_, itemAt := v.sidebarLines(l.sideW-2, l.h-2)
-		if r := y - 1; r >= 0 && r < len(itemAt) && itemAt[r] >= 0 {
-			v.side = itemAt[r]
-			m.focus = focusList
-			return v.applySide(m, v.sideItems()[v.side])
-		}
-		return nil
-	}
-	if x >= l.sideW+l.mainW || (m.inDetail() && l.prevW == 0) {
-		return nil
-	}
-	m.focus = focusList
-	if v.repair != nil {
-		// Its todos are behind the repair notice, not on it.
-		return nil
-	}
-	edge := 0
-	if framed(l.mainW, l.h) {
-		edge = 1
-	}
-	x, y = x-l.sideW-edge, y-edge
-	if x < 0 || y < 0 {
-		return nil
-	}
-	if v.filter.board {
-		if !v.boardClick(x, y, l.mainW-2*edge, l.h-2*edge) {
-			return nil
-		}
+// press does what a key does where the keyboard is now. The mouse means
+// the key it stands for, so the user's remapping does not apply.
+func (m *Model) press(k tea.KeyMsg) tea.Cmd {
+	var cmd tea.Cmd
+	if m.layer == layerNone {
+		_, cmd = m.dispatchKey(k)
 	} else {
-		idx := v.rows.offset + y
-		if idx >= len(v.lines) || v.lines[idx].header {
-			return nil
-		}
-		v.rows.cursor = idx
-		v.rows.clamp()
+		_, cmd = m.onKey(k)
 	}
-	if again {
-		_, cmd := m.onViewKey(tea.KeyMsg{Type: tea.KeyEnter})
-		return cmd
-	}
-	return nil
+	return cmd
 }
 
-// boardHead is how many rows a board column spends on its heading.
-const boardHead = 3
+func (m *Model) pressKey(name string) tea.Cmd {
+	k, ok := parseKey(name)
+	if !ok {
+		return nil
+	}
+	return m.press(k)
+}
 
-// boardClick puts the board's cursor on the card at x, y, reporting
-// whether there is one.
-func (v *todosView) boardClick(x, y, w, h int) bool {
-	_, cw := v.boardWindow(w)
-	col := v.boff + x/max(cw, 1)
-	if col >= len(v.bcols) || y < boardHead {
-		return false
+func (m *Model) wheelKeys(delta int) tea.Cmd {
+	k := tea.KeyMsg{Type: tea.KeyDown}
+	if delta < 0 {
+		k = tea.KeyMsg{Type: tea.KeyUp}
 	}
-	row := (y - boardHead) / cardRows
-	if col == v.bcol {
-		// The cursor's own column may be scrolled.
-		if fit := max((h-boardHead)/cardRows, 1); v.brow >= fit {
-			row += v.brow - fit + 1
-		}
+	var cmds []tea.Cmd
+	for i := 0; i < wheelStep; i++ {
+		cmds = append(cmds, m.press(k))
 	}
-	if row >= len(v.bcols[col].idxs) {
-		return false
-	}
-	v.bcol, v.brow = col, row
-	return true
+	return tea.Batch(cmds...)
 }
 
 // -- polling and background work -------------------------------------------

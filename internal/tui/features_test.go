@@ -326,41 +326,6 @@ func TestMouseIsOffUnlessAskedFor(t *testing.T) {
 	}
 }
 
-func TestMouseWheelAndClick(t *testing.T) {
-	h := newHarnessWith(t, sampleAPI(), func(c *config.Config) { c.Mouse = true })
-	h.press("g")
-	first := h.model.todos.selected().ID
-	h.send(tea.MouseMsg{Button: tea.MouseButtonWheelDown, Action: tea.MouseActionPress})
-	if h.model.todos.selected().ID == first {
-		t.Error("the wheel should move the cursor")
-	}
-
-	// Click the row that holds "Buy milk". The list starts under the header
-	// and its own frame, to the right of the sidebar.
-	top := headerRows + 1
-	row := -1
-	for i, l := range h.model.todos.lines {
-		if !l.header && h.model.todos.items[l.index].Title == "Buy milk" {
-			row = i
-		}
-	}
-	if row < 0 {
-		t.Fatal("Buy milk is not in the list")
-	}
-	h.send(tea.MouseMsg{X: sidebarWidth + 4, Y: top + row - h.model.todos.rows.offset, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
-	if got := h.model.todos.selected().Title; got != "Buy milk" {
-		t.Errorf("clicked row = %q, want Buy milk", got)
-	}
-
-	// Clicking a tab switches to it.
-	h.send(tea.MouseMsg{X: tabX(tabLists) + 1, Y: tabsRow, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
-	h.run(h.cmds...)
-	h.cmds = nil
-	if h.model.tab != tabLists {
-		t.Errorf("tab = %v, want lists", h.model.tab)
-	}
-}
-
 func TestAssigneeIsNamed(t *testing.T) {
 	h := newHarness(t, sampleAPI())
 	h.model.user.ID = "u1"

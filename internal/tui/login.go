@@ -484,7 +484,7 @@ func (l *loginView) view(w, h int) string {
 func loginKeys(pairs ...string) string {
 	var out []string
 	for i := 0; i+1 < len(pairs); i += 2 {
-		out = append(out, styKey.Render(pairs[i])+styFaint.Render(" "+pairs[i+1]))
+		out = append(out, keyed(pairs[i], styKey.Render(pairs[i])+styFaint.Render(" "+pairs[i+1])))
 	}
 	return strings.Join(out, "   ")
 }
@@ -536,9 +536,9 @@ func (l *loginView) whoLines(tw int) []string {
 		case l.waiting:
 			keys = styFaint.Render("sending the code…")
 		case looksLikeEmail(l.tokenInput.Value()):
-			keys = button("send code", true) + " " + styKey.Render("enter") + "   " + keys
+			keys = keyed("enter", button("send code", true)) + " " + styKey.Render("enter") + "   " + keys
 		case strings.TrimSpace(l.tokenInput.Value()) != "":
-			keys = button("sign in", true) + " " + styKey.Render("enter") + "   " + keys
+			keys = keyed("enter", button("sign in", true)) + " " + styKey.Render("enter") + "   " + keys
 		}
 		lines = append(lines,
 			styFaint.Render(wrapBlock("An email gets a 6-digit code. A token starts with evt_ and is stored in a 0600 file in your config directory.", tw)),
@@ -554,16 +554,22 @@ func (l *loginView) whoLines(tw int) []string {
 		lines = append(lines, wrapBlock(l.note, tw), "")
 	}
 	lines = append(lines, problem...)
+	press := pressing()
 	for i, row := range l.rows() {
 		value := ""
 		if row.key == rowServer {
 			value = "  " + styFaint.Render(server)
 		}
+		choose := func(bool) tea.Cmd {
+			l.choice = i
+			l.applyFocus()
+			return press("enter")
+		}
 		if i != l.choice {
-			lines = append(lines, "  "+styMuted.Render(row.title)+value)
+			lines = append(lines, clickable("  "+styMuted.Render(row.title)+value, choose))
 			continue
 		}
-		lines = append(lines, styAccent.Render("▌ ")+styKey.Render(row.title)+value)
+		lines = append(lines, clickable(styAccent.Render("▌ ")+styKey.Render(row.title)+value, choose))
 		for _, line := range strings.Split(wrapBlock(row.about, tw-4), "\n") {
 			lines = append(lines, "    "+styFaint.Render(strings.TrimLeft(line, " ")))
 		}
@@ -594,19 +600,29 @@ func (l *loginView) codeLines(tw int) []string {
 	if l.focus == loginCode {
 		mark, name = styAccent.Render("▌ "), styKey.Render("code     ")
 	}
-	lines = append(lines, mark+name+l.codeInput.View(), "")
+	lines = append(lines, clickable(mark+name+l.codeInput.View(), func(bool) tea.Cmd {
+		l.focus = loginCode
+		l.applyFocus()
+		return nil
+	}), "")
 	resend := "resend code"
 	if wait := l.retryAt.Sub(l.now()); wait > 0 {
 		resend = fmt.Sprintf("resend in %s", waitText(wait))
 	}
+	press := pressing()
+	act := func(focus int, s string) string {
+		return clickable(s, func(bool) tea.Cmd {
+			l.focus = focus
+			l.applyFocus()
+			return press("enter")
+		})
+	}
 	lines = append(lines,
-		"  "+button("verify", l.focus == loginCode)+" "+
-			button(resend, l.focus == loginResend)+" "+
-			button("change email", l.focus == loginChange),
+		"  "+act(loginCode, button("verify", l.focus == loginCode))+" "+
+			act(loginResend, button(resend, l.focus == loginResend))+" "+
+			act(loginChange, button("change email", l.focus == loginChange)),
 		"",
-		"  "+styKey.Render("enter")+styFaint.Render(" choose")+"   "+
-			styKey.Render("tab")+styFaint.Render(" next")+"   "+
-			styKey.Render("esc")+styFaint.Render(" change email"),
+		"  "+loginKeys("enter", "choose", "tab", "next", "esc", "change email"),
 		"",
 		styFaint.Render("on "+strings.TrimSuffix(l.server, "/")),
 	)

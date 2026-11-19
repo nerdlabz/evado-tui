@@ -1,6 +1,10 @@
 package tui
 
-import "strings"
+import (
+	"strings"
+
+	tea "github.com/charmbracelet/bubbletea"
+)
 
 // table renders a windowed, scrollable list of rows. Rows are produced by
 // the owner so every view can lay out its own columns while sharing
@@ -137,8 +141,8 @@ func (t *table) scrollbar() []string {
 }
 
 // render draws the visible rows using fn, appending a scrollbar column
-// when the list overflows.
-func (t *table) render(width int, fn func(i int, selected bool) string) string {
+// when the list overflows. A click on a row goes to click, when there is one.
+func (t *table) render(width int, fn func(i int, selected bool) string, click func(i int, double bool) tea.Cmd) string {
 	if t.items == 0 {
 		return styFaint.Render("(nothing here yet)")
 	}
@@ -153,6 +157,9 @@ func (t *table) render(width int, fn func(i int, selected bool) string) string {
 		idx := t.offset + i
 		row := fn(idx, idx == t.cursor)
 		row = padTo(row, content)
+		if click != nil {
+			row = clickable(row, func(double bool) tea.Cmd { return click(idx, double) })
+		}
 		if len(bar) > 0 {
 			row += bar[i]
 		} else {
@@ -208,13 +215,16 @@ func overlayAt(base, modal string, left, top, modalW int) string {
 func spliceLine(line, replacement string, x, w int) string {
 	// A line shorter than x has no cells out there, so pad it or the modal
 	// row would slide to the left edge.
-	head := padTo(sliceCells(line, 0, x), x)
-	tail := sliceCells(line, x+w, max(visibleWidth(line), x+w))
+	head := padTo(sliceCells(line, 0, x, false), x)
+	tail := sliceCells(line, x+w, max(visibleWidth(line), x+w), true)
 	return head + padTo(replacement, w) + tail
 }
 
 // sliceCells returns the part of a styled line covering cells [from, to).
-func sliceCells(line string, from, to int) string {
+// The end of a line keeps the zone markers past its last cell, so a region
+// a dialog was spliced into still closes; the start of one leaves them out,
+// so the region carries on under the dialog.
+func sliceCells(line string, from, to int, end bool) string {
 	if to <= from {
 		return ""
 	}
@@ -234,6 +244,9 @@ func sliceCells(line string, from, to int) string {
 		used += runeCells(line[i : i+size])
 		i += size
 		if used >= to {
+			if end {
+				b.WriteString(zoneMarks(line[i:]))
+			}
 			break
 		}
 	}

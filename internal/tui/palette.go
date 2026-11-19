@@ -179,6 +179,7 @@ func (p *palette) view() string {
 	if p.cursor >= p.visibleN {
 		start = p.cursor - p.visibleN + 1
 	}
+	press := pressing()
 	for i := start; i < len(p.matches) && i < start+p.visibleN; i++ {
 		e := p.entries[p.matches[i]]
 		sel := i == p.cursor
@@ -205,14 +206,21 @@ func (p *palette) view() string {
 			left = truncate(left, max(inner-3-visibleWidth(key), 4))
 			gap = max(inner-1-visibleWidth(left)-visibleWidth(key)-1, 1)
 		}
-		lines = append(lines, bar+left+base.Render(strings.Repeat(" ", gap))+key+base.Render(" "))
+		row := bar + left + base.Render(strings.Repeat(" ", gap)) + key + base.Render(" ")
+		lines = append(lines, clickable(row, func(bool) tea.Cmd {
+			p.cursor = i
+			return press("enter")
+		}))
 	}
 	if extra := len(p.matches) - (start + p.visibleN); extra > 0 {
 		lines = append(lines, styFaint.Render(fmt.Sprintf(" %d more, keep typing to narrow", extra)))
 	}
 	lines = append(lines, "", styFaint.Render("↑↓ choose · enter run · esc close"))
 	body := lipgloss.NewStyle().Width(inner).Render(strings.Join(lines, "\n"))
-	return styBox.Render(body)
+	return scrollable(styBox.Render(body), func(delta int) tea.Cmd {
+		p.cursor = min(max(p.cursor+delta, 0), max(len(p.matches)-1, 0))
+		return nil
+	})
 }
 
 // openPalette shows the palette.

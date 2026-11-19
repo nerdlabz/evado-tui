@@ -192,7 +192,7 @@ func (v *syncView) view(width, height int) string {
 	} else {
 		b.WriteString(v.rows.render(w, func(i int, sel bool) string {
 			return v.row(i, sel, w-1)
-		}))
+		}, v.clickChange))
 	}
 	if len(v.errs) > 0 {
 		b.WriteString("\n\n " + styErr.Render("per-change errors"))
@@ -201,13 +201,22 @@ func (v *syncView) view(width, height int) string {
 		}
 	}
 	if !framed(width, height) {
-		return b.String()
+		return scrollable(b.String(), v.m.wheelKeys)
 	}
-	return frame(b.String(), width, height, frameOpts{
+	return scrollable(frame(b.String(), width, height, frameOpts{
 		title:   v.status(),
 		foot:    styMuted.Render(plural(len(v.feed), "change")),
 		focused: true,
-	})
+	}), v.m.wheelKeys)
+}
+
+func (v *syncView) clickChange(i int, double bool) tea.Cmd {
+	v.rows.cursor = i
+	v.rows.clamp()
+	if double {
+		return v.m.pressKey("enter")
+	}
+	return nil
 }
 
 func (v *syncView) row(i int, sel bool, width int) string {
