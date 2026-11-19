@@ -1077,6 +1077,9 @@ func (c *cli) parse(ctx context.Context, args []string) error {
 	if pv.DueAt != nil {
 		fmt.Fprintf(&b, "due     %s\n", stamp(pv.DueAt))
 	}
+	if pv.RecurrenceRule != nil && *pv.RecurrenceRule != "" {
+		fmt.Fprintf(&b, "repeat  %s\n", local.RuleInWords(*pv.RecurrenceRule))
+	}
 	if a := pv.AssumedTime; a != nil {
 		fmt.Fprintf(&b, "assumed %q was read as %s", a.Text, strings.ToUpper(a.Assumed))
 		if hint := a.Hint(); hint != "" {
